@@ -76,11 +76,11 @@ In words:
 
 # Software
 ## Introduction
-The software is based upon a BLE example but with the BLE portions compiled; they may be used in the future.
+The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/ARMmbed/mbed-os-example-ble/tree/master/BLE_Button) but with the BLE portions compiled-out; they may be used in the future.
 
 ## Components
 This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com/teams/ublox/code/ublox-cellular-base-n2xx/) and [UbloxATCellularInterfaceN2xx](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface-n2xx/) drivers, rather than linking to the original libraries.  This is so that the drivers can be modified to add a configurable time-out to the network registration process.
 
 ## Operation
-The NINA-B1 software spends most of its time asleep, where the current consumption is ~3uA.  It powers up periodically and checks the VBAT_SEC_ON line and, if it is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N211 module, registers with the cellular network and transmits whatever data it has, then goes back to sleep.
+The NINA-B1 software spends most of its time asleep, where the current consumption is ~3uA.  It powers-up periodically and checks the VBAT_SEC_ON line; if it is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N211 module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
 
