@@ -62,9 +62,10 @@
 #define PASSWORD    NULL
 
 // Debug LED
-#define LONG_PULSE_MS   500
-#define SHORT_PULSE_MS  50
-#define PULSE_GAP_MS    250
+#define LONG_PULSE_MS        500
+#define SHORT_PULSE_MS       50
+#define VERY_SHORT_PULSE_MS  20
+#define PULSE_GAP_MS         250
 
 /**************************************************************************
  * LOCAL VARIABLES
@@ -104,7 +105,10 @@ extern "C" {
 
 void onboard_modem_init()
 {
-    // Nothing to do, powering on is good enough
+    // Power off and on again
+    vOrOnBar = 1;
+    wait_ms(500);
+    vOrOnBar = 0;
 }
 
 void onboard_modem_deinit()
@@ -139,12 +143,23 @@ static bool powerIsGood()
 }
 
 // Pulse the debug LED for a number of milliseconds
-static void pulseDebugLed(int milliseconds)
+void pulseDebugLed(int milliseconds)
 {
     debugLedBar = 1;
     wait_ms(milliseconds);
     debugLedBar = 0;
     wait_ms(PULSE_GAP_MS);
+}
+
+// Victory LED pattern
+void victoryDebugLed(int count)
+{
+    for (int x = 0; x < count; x++) {
+        debugLedBar = 1;
+        wait_ms(VERY_SHORT_PULSE_MS);
+        debugLedBar = 0;
+        wait_ms(VERY_SHORT_PULSE_MS);
+    }
 }
 
 // Indicate that a bad thing has happened, where the thing
@@ -199,22 +214,23 @@ static void getTime()
                             pulseDebugLed(SHORT_PULSE_MS);
                             x = sockUdp.recvfrom(&udpSenderAddress, buf, sizeof (buf));
                             if (x > 0) {
-                                pulseDebugLed(SHORT_PULSE_MS);
+                                wait_ms(1000);
+                                victoryDebugLed(10);
                             } else {
                                bad(8); // Did not receive
                             }
                         } else {
                            bad(7); // Unable to send
                         }
-                        // No need to close socket, it is automatically closed when the interface closes
+                        sockUdp.close();
                         pInterface->disconnect();
                         pInterface->deinit();
-                   } else {
-                       bad(6); // Unable to open socket
-                   }
-               } else {
-                   bad(5); // Unable to get host name (should never happen)
-               }
+                    } else {
+                        bad(6); // Unable to open socket
+                    }
+                } else {
+                    bad(5); // Unable to get host name (should never happen)
+                }
             } else {
                bad(4);  // Interface not connected
             }

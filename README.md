@@ -18,8 +18,8 @@ The hardware configuration expected by this software is as follows:
            |           |      #                TI BQ25505 EVM                   #       |  |    #                                                             #
    ########+########   |      #      [With the track between VBAT_SEC_ON        #       |  |    #                                                             #
    # Energy Source #   |      # J4    and the base of Q1 cut and the two ends   #       |  |    #                                                             #
-   ########+########   |      # VIN   exposed through a connector]              #       |  |    #           J104 1.  3.  5.  7.  9. 11. 13.  R.--+  ...       #
-           |           |      #                                                 #       |  |    #                2.  4.  6.  8. 10. 12. 14.  T.  |  ...       #
+   ########+########   |      # VIN   exposed through a connector]              #       |  |    #           J104 1.  3.  5.  7.  9. 11. 13.  T.--+  ...       #
+           |           |      #                                                 #       |  |    #                2.  4.  6.  8. 10. 12. 14.  R.  |  ...       #
            +-------+---|------+G                                                #       |  |    #                                             |  |            #
                    |   |      #                                       VOR       #       |  |    ##############################################|##|#############
                    |   |      #  VBAT_SEC_ON        Q1_Base        P  J15  G    #       |  |                                                  |  |
@@ -29,7 +29,7 @@ The hardware configuration expected by this software is as follows:
                    |   |   |                           |           |                       |                                                  |  |
                    |   |   |   +-----------------------+           +-----------------------+                                                  |  |
                    |   |   |   |                                                                                                              |  |
-                   |   |   |   |   +--------------------------------------------------------------------------------------------------------- +  |
+                   |   |   |   |   +----------------------------------------------------------------------------------------------------------+  |
                    |   |   |   |   |                                                                                                             |
                    |   |   |   |   |   +---------------------------------------------------------------------------------------------------------+
                    |   |   |   |   |   |
@@ -43,14 +43,14 @@ The hardware configuration expected by this software is as follows:
                    |   |   |   |   |   |   #    .  .                                                                      #
                    |   |   |   |   |   |   #    .  .                                                                      #
                    |   |   |   |   |   |   #    .  .                                                                      #
-                   |   |   |   |   |   |   #    .  .                             J7                                       #
-                   |   |   |   |   |   +------- .T .                            .  .                                      #
-                   |   |   |   |   +----------- .R .                            .  .                                      #
-                   |   |   |   |           #                                    .  .                                      #
-                   |   |   |   |           #     J6  J15                        .  .                                      #
-                   |   |   |   |           #      .   .                         .  .                                      #
-                   |   |   |   |           #      .  P.---+                     .  .                                      #
-                   |   |   |   |           #      .  G.-+ |                                8  9 10 11 12 13  G            #
+                   |   |   |   |   |   |   # +--.C .                             J7                                       #
+                   |   |   |   |   |   +-----|- .T .                            .  .                                      #
+                   |   |   |   |   +---------|- .R .                            .  .                                      #
+                   |   |   |   |           # |                                  .  .                                      #
+                   |   |   |   |           # |   J6  J15                        .  .                                      #
+                   |   |   |   |           # |    .   .                         .  .                                      #
+                   |   |   |   |           # |    .  P.---+                     .  .                                      #
+                   |   |   |   |           # +----.G G.-+ |                                8  9 10 11 12 13  G            #
                    |   |   |   |           #            | |  J3 .  .  .  .  .  .  .  .  J4 .  .  .  .  .  .  .  .  .  .   #
                    |   |   |   |           #            | |                                   |  |  |                     #
                    |   |   |   |           #############|#|###################################|##|##|######################
@@ -72,7 +72,7 @@ In words:
 * `D10` of the NINA B1 EVK is configured as an input and connected to the `VBAT_SEC_ON` (active low) output of the BQ25505 chip.
 * `D11` of the NINA B1 EVK is configured as an output and used to drive the base of Q1 on the TI BQ25505 EVM board (and hence control whether `VOR` is on or not).
 * A u-blox SARA-N211 EVK is configured so that all of the lower board is off (the lower board is still necessary as the SIM card holder is on the lower board) and power is applied directly to the module by connecting `VOR` from the TI BQ25505 EVM to pins 0 and 8 of J101.
-* The serial lines from the NINA-B1 module are connected to the SARA-N211 module's serial lines.
+* The serial lines from the NINA-B1 module are connected to the SARA-N211 module's serial lines and the CTS line of the NINA-B1 module is connected to ground.
 
 # Software
 ## Introduction
