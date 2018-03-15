@@ -88,6 +88,6 @@ This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com
 ## Operation
 The NINA-B1 software spends most of its time asleep, where the current consumption is ~3uA.  It powers-up periodically and checks the `VBAT_SEC_ON` line; if it is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N211 module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
 
-As a video:
+As a video (the action begins 16 seconds in):
 
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=HQhBW8Z5sNg" target="_blank"><img src="http://img.youtube.com/vi/HQhBW8Z5sNg/0.jpg" alt="Software and HW for NRG harvesting test in action" width="240" height="180" border="10" /></a>
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=HQhBW8Z5sNg" target="_blank"><img src="http://img.youtube.com/vi/HQhBW8Z5sNg/0.jpg" alt="Software and HW for NRG harvesting test in action" width="480" height="360" border="10" /></a>
