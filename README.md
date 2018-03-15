@@ -74,6 +74,10 @@ In words:
 * A u-blox SARA-N211 EVK is configured so that all of the lower board is off (the lower board is still necessary as the SIM card holder is on the lower board) and power is applied directly to the module by connecting `VOR` from the TI BQ25505 EVM to pins 0 and 8 of J101.
 * The serial lines from the NINA-B1 module are connected to the SARA-N211 module's serial lines and the CTS line of the NINA-B1 module is connected to ground.
 
+In pictures:
+
+![hw configuration](hw_configuration.jpg "HW configuration")
+
 # Software
 ## Introduction
 The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/ARMmbed/mbed-os-example-ble/tree/master/BLE_Button) but with the BLE portions compiled-out; they may be used in the future.
