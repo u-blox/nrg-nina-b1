@@ -1,7 +1,8 @@
 # Introduction
 This repo contains Mbed-based software to run on a u-blox NINA-B1 module (e.g. mounted on a `UBLOX_EVK_NINA_B1` Mbed board), written as part of an energy harvesting experiment.
 
-# Hardware Configuration
+# Hardware
+## Configuration
 The hardware configuration expected by this software is as follows:
 ```
                                                                                                 ###############################################################
@@ -37,7 +38,7 @@ The hardware configuration expected by this software is as follows:
                    |   |   |   |   |   |   #                                                                              #
                    |   |   |   |   |   |   #     J9                                                                       #
                    |   |   |   |   |   |   #    .  .                    u-blox NINA B1 EVK                                #
-                   |   |   |   |   |   |   #    .  .            [All jumpers removed, R6 removed]                         #
+                   |   |   |   |   |   |   #    .  .         [All jumpers removed, R4 and R6 removed]                     #
                    |   |   |   |   |   |   #    .  .                                                                      #
                    |   |   |   |   |   |   #    .  .                                                                      #
                    |   |   |   |   |   |   #    .  .                                                                      #
@@ -67,16 +68,20 @@ In words:
 
 * A TI BQ25505 EVM is connected to an energy source (e.g. a solar panel) and a battery/supercap (e.g. a LiIon coin cell).
 * The BQ25505 EVM is modified so that the track running between the `VBAT_SEC_ON` (active low) output of the BQ25505 chip and the base of Q1 is cut and these two lines are made available on a connector.
-* The NINA B1 EVK is configured so that only the NINA-B1 module is powered, directly from the battery/supercap to J15.  It will be necessary to add all of the jumpers back onto J9, J7 (for external power), J6 and J15 (both in the upper-most position as viewed in the diagram above) to program the NINA-B1 module of course.
-* `D9` of the NINA B1 EVK is a debug output which would normally drive the multi-colour LED on the board but, with all the jumpers removed, should be connected to a debug LED with series resistor.  This is necessary since the NINA-B1 module only has a single serial port which will be connected to the SARA-N211 module and hence there is no serial debug port available.
+* On the NINA B1 EVK R4 and R6 must be removed.
+* The NINA B1 EVK is configured so that only the NINA-B1 module is powered, directly from the battery/supercap to J15, by removing ALL the jumpers.  It will be necessary to add all of the jumpers back onto J9, J7 (for external power), J6 and J15 (both in the upper-most position as viewed in the diagram above) in order to program the NINA-B1 module of course.
+* `D9` of the NINA B1 EVK is a debug output which would normally drive the multi-colour LED on the board but, with all the jumpers removed, should be connected to a debug LED with series resistor.  This is necessary since the NINA-B1 module only has a single serial port which will be connected to the SARA-N211 module and hence there is no serial port available for debugging.
 * `D10` of the NINA B1 EVK is configured as an input and connected to the `VBAT_SEC_ON` (active low) output of the BQ25505 chip.
-* `D11` of the NINA B1 EVK is configured as an output and used to drive the base of Q1 on the TI BQ25505 EVM board (and hence control whether `VOR` is on or not).
-* A u-blox SARA-N211 EVK is configured so that all of the lower board is off (the lower board is still necessary as the SIM card holder is on the lower board) and power is applied directly to the module by connecting `VOR` from the TI BQ25505 EVM to pins 0 and 8 of J101.
-* The serial lines from the NINA-B1 module are connected to the SARA-N211 module's serial lines and the CTS line of the NINA-B1 module is connected to ground.
+* `D11` of the NINA B1 EVK is configured as an output and used to drive the base of Q1 on the TI BQ25505 EVM board (hence controlling whether `VOR` is on or not).
+* A u-blox SARA-N211 EVK is configured so that all of the lower board is off (the lower board is still necessary as the SIM card holder is on the lower board): main power toggle switch is off, all slide switches are off (i.e. on the side towards the middle of the board) and the 3V8 jumper on the lower board (near the SIM) is removed.  Power is then applied directly to the module by connecting `VOR` from the TI BQ25505 EVM to any one of pins 7, 8 9 or 10 of J101 (ground is pin 1 on both J101 and J104).
+* The serial lines from the NINA-B1 module are connected to the SARA-N211 module's serial lines and the CTS line of the NINA-B1 module is connected to ground (not sure if this is required or not).
 
 In pictures:
 
 ![hw configuration](hw_configuration.jpg "HW configuration")
+
+## Volts
+The NINA-B1 module operates its IO pins at whatever voltage is supplied at its VCC pin (the somewhat tempting VCC_IO pin on the module is internally connected to VCC).  The SARA-N211 EVK includes level shifters that take the 3.3V IO from the SARA-N211 module down to 1.8V.  So unfortunately this entire arrangement ONLY works reliably if NINA-B1's VCC is 3.3 Volts.  Some high efficiency DC to DC converters will be added to fix this soon...
 
 # Software
 ## Introduction
