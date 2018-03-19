@@ -92,9 +92,34 @@ The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/A
 ## Components
 This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com/teams/ublox/code/ublox-cellular-base-n2xx/) and [UbloxATCellularInterfaceN2xx](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface-n2xx/) drivers, rather than linking to the original libraries.  This is so that the drivers can be modified to add a configurable time-out to the network registration process.
 
+NOTE: the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c`(so that Mbed asserts can be exposed).  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
+
+`void mbed_error_vfprintf(const char * format, va_list arg)`
+
+...becomes:
+
+`WEAK void mbed_error_vfprintf(const char * format, va_list arg)`
+
+...and edit `mbed-os/platform/mbed_assert.c` so that:
+
+`void mbed_assert_internal(const char *expr, const char *file, int line)`
+
+...becomes:
+
+```
+#include "platform/mbed_toolchain.h"
+WEAK void mbed_assert_internal(const char *expr, const char *file, int line)
+```
+
 ## Operation
 The NINA-B1 software spends most of its time asleep, where the current consumption is ~0.3 uAmps.  It powers-up periodically and checks the `VBAT_SEC_ON` line; if that line is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N2xx module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
 
 As a video (the action begins 16 seconds in):
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=HQhBW8Z5sNg" target="_blank"><img src="http://img.youtube.com/vi/HQhBW8Z5sNg/0.jpg" alt="Software and HW for NRG harvesting test in action" width="480" height="270" border="10" /></a>
+
+## Debugging
+With only GPIO-based debugging, there are two ways to monitor what is going on in this code:
+
+1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since they are able to do very long term capture and will automagicaly decode the serial protocol).
+2.  

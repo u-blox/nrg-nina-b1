@@ -18,7 +18,7 @@
         },
         "UBLOX_EVK_NINA_B1": {
             "ble_button_pin_name": "SW1",
-            "target.macros_add": ["MODEM_ON_BOARD=1", "MDMTXD=TX_PIN_NUMBER", "MDMRXD=RX_PIN_NUMBER", "MBED_CONF_UBLOX_CELL_N2XX_BAUD_RATE=9600"]
+            "target.macros_add": ["MODEM_ON_BOARD=1", "MDMTXD=TX_PIN_NUMBER", "MDMRXD=RX_PIN_NUMBER", "MBED_CONF_UBLOX_CELL_N2XX_BAUD_RATE=9600", "MBED_HEAP_STATS_ENABLED=1", "MBED_STACK_STATS_ENABLED=1"]
         },
         "K64F": {
             "target.features_add": ["BLE"],

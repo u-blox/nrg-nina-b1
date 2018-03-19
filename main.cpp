@@ -15,6 +15,9 @@
  */
 #include <events/mbed_events.h>
 #include <mbed.h>
+#include <mbed_stats.h> // For heap stats
+#include <cmsis_os.h>   // For stack stats
+#include <ctype.h>      // For toupper()
 #include "ble/BLE.h"
 #include "ble/Gap.h"
 #include "ButtonService.h"
@@ -42,9 +45,12 @@
 // Define this to enable the BLE bits
 //#define ENABLE_BLE
 
+// Define this to enable the Morse printing of RAM stats at each event
+//#define ENABLE_RAM_STATS
+
 // How frequently to wake-up to see if there is enough energy
 // to do anything
-#define WAKEUP_INTERVAL_MS 60000
+#define WAKEUP_INTERVAL_MS 120000
 
 // The number of times to attempt a cellular connection
 #define CONNECT_TRIES 1
@@ -64,8 +70,16 @@
 // Debug LED
 #define LONG_PULSE_MS        500
 #define SHORT_PULSE_MS       50
-#define VERY_SHORT_PULSE_MS  20
+#define VERY_SHORT_PULSE_MS  35 // Don't set this any smaller as this is the smallest
+                                // value where individual flashes are visible on a mobile
+                                // phone video
 #define PULSE_GAP_MS         250
+#define MORSE_DOT            100
+#define MORSE_DASH           500
+#define MORSE_GAP            250
+#define MORSE_LETTER_GAP     1250
+#define MORSE_WORD_GAP       1500
+#define MORSE_START_END_GAP  1500  // Must be at least as large as the letter gap
 
 /**************************************************************************
  * LOCAL VARIABLES
@@ -82,8 +96,38 @@ static DigitalOut vOrOnBar(D11, 1);
 // Debug LED
 static DigitalOut debugLedBar(LED1, 1);
 
+// A pointer to a thread to display Morse on the LED
+static Thread *pMorseThread = NULL;
+
+// Flag to indicate that Morse output is active
+static bool volatile morseActive = false;
+
+// Buffer for Morse printf()s
+static char morseBuf[64];
+
+// Morse codes
+static const char morseLetters[] = {'?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+                                    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+                                    'W', 'X', 'Y', 'Z', '.', ',', '/', '1', '2', '3', '4', '5',
+                                    '6', '7', '8', '9', '0'};
+static const char *pMorseCodes[] = {"..--.." /* ? */, ".--.-." /* @ */, ".-" /* A */, "-..." /* B */, "-.-." /* C */, "-.." /* D */,
+                                    "." /* E */, "..-." /* F */, "--." /* G */, "...." /* H */, ".." /* I */, ".---" /* J */,
+                                    "-.-" /* K */, ".-.." /* L */, "--" /* M */, "-." /* N */, "---" /* O */, ".--." /* P */,
+                                    "--.-" /* Q */, ".-." /* R */, "..." /* S */, "-" /* T */, "..-" /* U */, "...-" /* V */,
+                                    ".--" /* W */, "-..-" /* Z */, "-.--" /* Y */, "--.." /* Z */, ".-.-.-" /* . */, "--..--" /* , */,
+                                    "-..-." /* / */, ".----" /* 1 */, "..---" /* 2 */, "...--" /* 3 */, "....-" /* 4 */, "....." /* 5 */,
+                                    "-...." /* 6 */, "--..." /* 7 */, "---.." /* 8 */, "----." /* 9 */, "-----" /* 0 */};
+
 // An event queue
 static EventQueue eventQueue(/* event count */ 10 * EVENTS_EVENT_SIZE);
+
+#ifdef ENABLE_RAM_STATS
+// Storage for heap stats
+static mbed_stats_heap_t statsHeap;
+
+// Storage for stack stats
+static mbed_stats_stack_t statsStack;
+#endif
 
 #ifdef ENABLE_BLE
 // The button on the Nina-B1 EVK
@@ -94,6 +138,13 @@ const static char     DEVICE_NAME[] = "Button";
 static const uint16_t uuid16_list[] = {ButtonService::BUTTON_SERVICE_UUID};
 static ButtonService *pButtonService;
 #endif
+
+/**************************************************************************
+ * PUBLIC FUNCTION PROTOTYPES
+ *************************************************************************/
+
+void printfMorse(const char *pFormat, ...);
+void tPrintfMorse(const char *pFormat, ...);
 
 /**************************************************************************
  * COMPLETE THE CELLULAR CLASS WITH POWER/INIT FUNCTIONS
@@ -132,33 +183,32 @@ void onboard_modem_power_down()
 }
 #endif
 
-/**************************************************************************
- * STATIC FUNCTIONS
- *************************************************************************/
 
- // Check if the stored energy is sufficient to do stuff
-static bool powerIsGood()
-{
-    return !vBatSecOnBar;
-}
+/**************************************************************************
+ * STATIC FUNCTIONS: DEBUG
+ *************************************************************************/
 
 // Pulse the debug LED for a number of milliseconds
 void pulseDebugLed(int milliseconds)
 {
-    debugLedBar = 1;
-    wait_ms(milliseconds);
-    debugLedBar = 0;
-    wait_ms(PULSE_GAP_MS);
+    if (!morseActive) {
+        debugLedBar = 1;
+        wait_ms(milliseconds);
+        debugLedBar = 0;
+        wait_ms(PULSE_GAP_MS);
+    }
 }
 
 // Victory LED pattern
 void victoryDebugLed(int count)
 {
-    for (int x = 0; x < count; x++) {
-        debugLedBar = 1;
-        wait_ms(VERY_SHORT_PULSE_MS);
-        debugLedBar = 0;
-        wait_ms(VERY_SHORT_PULSE_MS);
+    if (!morseActive) {
+        for (int x = 0; x < count; x++) {
+            debugLedBar = 1;
+            wait_ms(VERY_SHORT_PULSE_MS);
+            debugLedBar = 0;
+            wait_ms(VERY_SHORT_PULSE_MS);
+        }
     }
 }
 
@@ -166,9 +216,122 @@ void victoryDebugLed(int count)
 // is identified by the number of pulses
 static void bad(int pulses)
 {
-    for (int x = 0; x < pulses; x++) {
-        pulseDebugLed(LONG_PULSE_MS);
+    if (!morseActive) {
+        for (int x = 0; x < pulses; x++) {
+            pulseDebugLed(LONG_PULSE_MS);
+        }
     }
+}
+
+// Flag the start or end of a Morse sequence
+static void morseStartEndFlag()
+{
+    for (int x = 0; x < 5; x++) {
+        debugLedBar = 1;
+        wait_ms(VERY_SHORT_PULSE_MS);
+        debugLedBar = 0;
+        wait_ms(VERY_SHORT_PULSE_MS);
+    }
+}
+
+// Flash out a buffer of characters in Morse
+// Please call printfMorse() or tPrintfMorse(),
+// see public functions below
+static void morseFlash(const char *pBuf)
+{
+    char letter;
+    const char *pMorseString;
+    int morseLen;
+    int len = strlen(pBuf);
+    
+    morseActive = true;
+   // Begin with the opening sequence
+    debugLedBar = 0;
+    wait_ms(MORSE_START_END_GAP);
+    morseStartEndFlag();
+    wait_ms(MORSE_START_END_GAP);
+    // Flash each character
+    for (int x = 0; x < len; x++) {
+        letter = toupper(*(pBuf + x));
+        if ((letter == ' ') || (letter == '\n')) {
+            // A gap between words, but ignoring a last '\n' or ' '
+            if (x != len - 1) {
+                wait_ms(MORSE_WORD_GAP);
+            }
+        } else {
+            // A real letter
+            pMorseString = NULL;
+            for (unsigned int y = 0; (pMorseString == NULL) && (y < sizeof(morseLetters)); y++) {
+                if (letter == morseLetters[y]) {
+                    pMorseString = pMorseCodes[y];
+                }
+            }
+            
+            // If the letter is not found, put in '?'
+            if (pMorseString == NULL) {
+                pMorseString = pMorseCodes[0];
+            }
+            
+            // Now flash the LED
+            morseLen = strlen(pMorseString);
+            for (int y = 0; y < morseLen; y++) {
+                debugLedBar = 1;
+                if (*(pMorseString + y) == '.') {
+                    wait_ms(MORSE_DOT);
+                } else if (*(pMorseString + y) == '-') {
+                    wait_ms(MORSE_DASH);
+                } else {
+                    // Must be some mishtake
+                }
+                debugLedBar = 0;
+                wait_ms(MORSE_GAP);
+            }
+            
+            // Wait between letters
+            wait_ms(MORSE_LETTER_GAP);
+        }
+    }
+    wait_ms(MORSE_START_END_GAP - MORSE_LETTER_GAP);
+    morseStartEndFlag();
+    wait_ms(MORSE_START_END_GAP);
+    morseActive = false;
+}
+
+// Flash a message in Morse on the LED; please call printfMorse() 
+// or tPrintfMorse(), see public functions below
+static void vPrintfMorse(bool async, const char *pFormat, va_list args)
+{
+    unsigned int len;
+    
+    // Get the string into a buffer
+    len = vsnprintf(morseBuf, sizeof(morseBuf), pFormat, args);
+    if (len > sizeof(morseBuf) - 1) {
+        morseBuf[sizeof(morseBuf) - 1] = 0; // Ensure terminator
+    }
+
+    if (async) {
+        // Only have one outstanding at a time
+        if (pMorseThread != NULL) {
+            pMorseThread->terminate();
+            pMorseThread->join();
+            delete pMorseThread;
+            pMorseThread = NULL;
+        }
+        pMorseThread = new Thread();
+        pMorseThread->start(callback(morseFlash, morseBuf));
+    } else {
+        morseFlash(morseBuf);
+    }
+}
+
+/**************************************************************************
+ * STATIC FUNCTIONS: GENERAL
+ *************************************************************************/
+
+// Check if the stored energy is sufficient to do stuff
+static bool powerIsGood()
+{
+    return !vBatSecOnBar;
 }
 
 // Get the time from an NTP server over a UDP cellular connection
@@ -244,9 +407,24 @@ static void getTime()
     delete pInterface;
 }
 
+// Printf() out some RAM stats
+#ifdef ENABLE_RAM_STATS
+static void ramStats()
+{
+    mbed_stats_heap_get(&statsHeap);
+    mbed_stats_stack_get(&statsStack);
+    
+    printfMorse("H %d S %d", statsHeap.reserved_size - statsHeap.max_size, statsStack.reserved_size - statsStack.max_size);
+}
+#endif
+
 // Perform the timed event
 static void eventTickCallback(void)
 {
+#ifdef ENABLE_RAM_STATS
+    ramStats();
+#endif
+
     if (powerIsGood()) {
         getTime();
         // Make sure the modem module is definitely off
@@ -255,6 +433,10 @@ static void eventTickCallback(void)
         bad(1);
     }
 }
+
+/**************************************************************************
+ * STATIC FUNCTIONS: BLE
+ *************************************************************************/
 
 #ifdef ENABLE_BLE
 // Callback for button-down
@@ -341,15 +523,52 @@ static void scheduleBleEventsProcessing(BLE::OnEventsToProcessCallbackContext* c
 #endif // ENABLE_BLE
 
 /**************************************************************************
- * MAIN
+ * PUBLIC FUNCTIONS
  *************************************************************************/
 
+// Printf() a message in Morse
+void printfMorse(const char *pFormat, ...)
+{
+    va_list args;
+
+    va_start(args, pFormat);
+    vPrintfMorse(false, pFormat, args);
+    va_end(args);
+}
+
+// Printf() a message in Morse in its own thread
+// If the thread is already running it will be terminated
+// and the new message will replace it
+void tPrintfMorse(const char *pFormat, ...)
+{
+    va_list args;
+
+    va_start(args, pFormat);
+    vPrintfMorse(true, pFormat, args);
+    va_end(args);
+}
+
+// Override the Mbed error vPrintf
+void mbed_error_vfprintf(const char *pFormat, va_list args)
+{
+    vPrintfMorse(false, pFormat, args);
+}
+
+// Capture Mbed asserts
+void mbed_assert_internal(const char *expr, const char *file, int line)
+{
+    while (1) {
+        printfMorse("ASRT %s %s %d", expr, file, line);
+    }
+}
+
+// Main
 int main()
 {
     // Nice long pulse at the start to make it clear we're running
     pulseDebugLed(1000);
     wait_ms(1000);
-
+    
     // Call this directly once at the start since I'm an impatient sort
     eventTickCallback();
 
