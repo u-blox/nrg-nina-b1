@@ -121,5 +121,13 @@ As a video (the action begins 16 seconds in):
 ## Debugging
 With only GPIO-based debugging, there are two ways to monitor what is going on in this code:
 
-1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since they are able to do very long term capture and will automagicaly decode the serial protocol).
-2.  
+1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since the box can do very long term captures and will automagicaly decode the serial protocol).
+2.  Use the `printfMorse()` function that will flash the debug LED based on your strings.
+
+When using `printfMorse()` the start and end of a Morse sequence is signalled by a rapid flash on the LED.  Remember to keep your Morse strings short as they will take a while to come out.  The `printfMorse()` function blocks and there is also a `tPrintfMorse()` function which allows the rest of the code to run but will mask any use of the debug LED while it is active.
+
+Here is a video of a sample of this Morse sequence:
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=8VpEXieqOn8" target="_blank"><img src="http://img.youtube.com/vi/8VpEXieqOn8/0.jpg" alt="printfMorse()" width="480" height="270" border="10" /></a>
+
+A good Morse chart can be found on [Wikipedia](https://en.wikipedia.org/wiki/Morse_code#/media/File:International_Morse_Code.svg).
