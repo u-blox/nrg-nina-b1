@@ -50,7 +50,7 @@
 
 // How frequently to wake-up to see if there is enough energy
 // to do anything
-#define WAKEUP_INTERVAL_MS 120000
+#define WAKEUP_INTERVAL_MS 60000
 
 // The number of times to attempt a cellular connection
 #define CONNECT_TRIES 1
@@ -354,7 +354,6 @@ static void getTime()
     // Set up the modem
     pulseDebugLed(SHORT_PULSE_MS);
     if (pInterface->init(SIM_PIN)) {
-
         // Register with the network
         for (x = 0; powerIsGood() && (x < CONNECT_TRIES) && !connected; x++) {
             pulseDebugLed(SHORT_PULSE_MS);
@@ -378,7 +377,7 @@ static void getTime()
                             x = sockUdp.recvfrom(&udpSenderAddress, buf, sizeof (buf));
                             if (x > 0) {
                                 wait_ms(1000);
-                                victoryDebugLed(10);
+                                victoryDebugLed(25);
                             } else {
                                bad(8); // Did not receive
                             }

@@ -43,7 +43,7 @@ void UbloxATCellularInterfaceN2xx::handle_event(){
     fhs.fh = _fh;
     fhs.events = POLLIN;
 
-    while (true) {
+    while (_run_event_thread) {
         count = poll(&fhs, 1, 1000);
         if (count > 0 && (fhs.revents & POLLIN)) {
             LOCK();
@@ -471,6 +471,9 @@ nsapi_size_or_error_t UbloxATCellularInterfaceN2xx::socket_recvfrom(nsapi_socket
                 // Should never fail to read when there is pending data
                 success = false;
             }
+            
+            free(tmpBuf);
+            
         } else if (timer.read_ms() < SOCKET_TIMEOUT) {
             // Wait for URCs
             tr_debug("Waiting for URC...");
@@ -649,6 +652,7 @@ UbloxATCellularInterfaceN2xx::UbloxATCellularInterfaceN2xx(PinName tx,
     _sim_pin_check_change_pending_enabled_value = false;
     _sim_pin_change_pending = false;
     _sim_pin_change_pending_new_pin_value = NULL;
+    _run_event_thread = true;
     _apn = NULL;
     _uname = NULL;
     _pwd = NULL;
@@ -686,6 +690,10 @@ UbloxATCellularInterfaceN2xx::UbloxATCellularInterfaceN2xx(PinName tx,
 // Destructor.
 UbloxATCellularInterfaceN2xx::~UbloxATCellularInterfaceN2xx()
 {
+    // Let the event thread shut down tidily
+    _run_event_thread = false;
+    event_thread.join();
+
     // Free _ip if it was ever allocated
     free(_ip);
 }

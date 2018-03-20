@@ -590,6 +590,7 @@ private:
     const char *_sim_pin_change_pending_new_pin_value;
     Thread event_thread;
     void handle_event();
+    bool _run_event_thread;
     SockCtrl * find_socket(int modem_handle = SOCKET_UNUSED);
     void clear_socket(SockCtrl * socket);
     bool check_socket(SockCtrl * socket);
