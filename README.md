@@ -92,7 +92,7 @@ The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/A
 ## Components
 This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com/teams/ublox/code/ublox-cellular-base-n2xx/) and [UbloxATCellularInterfaceN2xx](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface-n2xx/) drivers, rather than linking to the original libraries.  This is so that the drivers can be modified to add a configurable time-out to the network registration process.
 
-NOTE: the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c`(so that Mbed asserts can be exposed).  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
+NOTE: the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c` (so that Mbed asserts can be exposed through `printfMorse()`, see below).  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
 
 `void mbed_error_vfprintf(const char * format, va_list arg)`
 
@@ -119,14 +119,14 @@ As a video (the action begins 16 seconds in):
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=HQhBW8Z5sNg" target="_blank"><img src="http://img.youtube.com/vi/HQhBW8Z5sNg/0.jpg" alt="Software and HW for NRG harvesting test in action" width="480" height="270" border="10" /></a>
 
 ## Debugging
-With only GPIO-based debugging, there are two ways to monitor what is going on in this code:
+With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx modem), there are two ways to monitor what is going on in this code:
 
 1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since the box can do very long term captures and will automagicaly decode the serial protocol).
-2.  Use the `printfMorse()` function that will flash the debug LED based on your strings.
+2.  Use the `printfMorse()` function that will flash the debug LED based on `printf()`-style strings.
 
-When using `printfMorse()` the start and end of a Morse sequence is signalled by a rapid flash on the LED.  Remember to keep your Morse strings short as they will take a while to come out.  The `printfMorse()` function blocks and there is also a `tPrintfMorse()` function which allows the rest of the code to run but will mask any use of the debug LED while it is active.
+When using `printfMorse()` the start and end of a Morse sequence is signalled by a rapid flash on the LED.  Remember to keep your Morse strings short as they will take a while to come out.  The `printfMorse()` function blocks but there is also a `tPrintfMorse()` function which runs in its own task, allowing the rest of the code to run (but masking any other use of the debug LED while it is active).
 
-Here is a video of a sample of this Morse sequence:
+Here is a video of a sample Morse sequence:
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=8VpEXieqOn8" target="_blank"><img src="http://img.youtube.com/vi/8VpEXieqOn8/0.jpg" alt="printfMorse()" width="480" height="270" border="10" /></a>
 
