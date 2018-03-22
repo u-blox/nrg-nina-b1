@@ -48,6 +48,11 @@
 // Define this to enable the Morse printing of RAM stats at each event
 //#define ENABLE_RAM_STATS
 
+// Define this to divert mbed-os asserts to Morse (requires you to edit mbed_error_vfprintf()
+// in mbed-os/platform/mbed_board.c and mbed_assert_internal() in mbed-os/platform/mbed_assert.c
+// to be WEAK in order that they can be overridden.
+//#define ENABLE_ASSERTS_IN_MORSE
+
 // How frequently to wake-up to see if there is enough energy
 // to do anything
 #define WAKEUP_INTERVAL_MS 60000
@@ -547,6 +552,7 @@ void tPrintfMorse(const char *pFormat, ...)
     va_end(args);
 }
 
+#ifdef ENABLE_ASSERTS_IN_MORSE
 // Override the Mbed error vPrintf
 void mbed_error_vfprintf(const char *pFormat, va_list args)
 {
@@ -560,6 +566,7 @@ void mbed_assert_internal(const char *expr, const char *file, int line)
         printfMorse("ASRT %s %s %d", expr, file, line);
     }
 }
+#endif
 
 // Main
 int main()

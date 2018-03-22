@@ -92,7 +92,7 @@ The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/A
 ## Components
 This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com/teams/ublox/code/ublox-cellular-base-n2xx/) and [UbloxATCellularInterfaceN2xx](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface-n2xx/) drivers, rather than linking to the original libraries.  This is so that the drivers can be modified to add a configurable time-out to the network registration process.
 
-NOTE: the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c` (so that Mbed asserts can be exposed through `printfMorse()`, see below).  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
+NOTE: if you define ENABLE_ASSERTS_IN_MORSE the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c` so that Mbed asserts can be exposed through `printfMorse()`.  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
 
 `void mbed_error_vfprintf(const char * format, va_list arg)`
 
