@@ -355,54 +355,54 @@ static void getTime()
 
     pInterface->set_credentials(APN, USERNAME, PASSWORD);
     pInterface->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
+    pInterface->set_release_assistance(true);
 
     // Set up the modem
     pulseDebugLed(SHORT_PULSE_MS);
     if (pInterface->init(SIM_PIN)) {
         // Register with the network
-        for (x = 0; powerIsGood() && (x < CONNECT_TRIES) && !connected; x++) {
+        for (x = 0; !connected && powerIsGood() && (x < CONNECT_TRIES); x++) {
             pulseDebugLed(SHORT_PULSE_MS);
             connected = (pInterface->connect() == 0);
         }
 
-        if (powerIsGood()) {
-            if (connected) {
+        // Note: don't check for power being good again here.  The cellular modem
+        // is about to transmit and the VBAT_SEC_ON line will glitch as a result
+        // Better to rely on the capacity of the system to tide us over.
+        if (connected) {
+            pulseDebugLed(SHORT_PULSE_MS);
+            // 195.195.221.100 is an IP address of 2.pool.ntp.org
+            if (pInterface->gethostbyname("195.195.221.100", &udpServer) == 0) {
                 pulseDebugLed(SHORT_PULSE_MS);
-                // 195.195.221.100 is an IP address of 2.pool.ntp.org
-                if (pInterface->gethostbyname("195.195.221.100", &udpServer) == 0) {
+                udpServer.set_port(123);
+                if (sockUdp.open(pInterface) == 0) {
                     pulseDebugLed(SHORT_PULSE_MS);
-                    udpServer.set_port(123);
-                    if (sockUdp.open(pInterface) == 0) {
+                    sockUdp.set_timeout(10000);
+                    memset (buf, 0, sizeof(buf));
+                    *buf = '\x1b';
+                    if (sockUdp.sendto(udpServer, (void *) buf, 48) == 48) {
                         pulseDebugLed(SHORT_PULSE_MS);
-                        sockUdp.set_timeout(10000);
-                        memset (buf, 0, sizeof(buf));
-                        *buf = '\x1b';
-                        if (sockUdp.sendto(udpServer, (void *) buf, 48) == 48) {
-                            pulseDebugLed(SHORT_PULSE_MS);
-                            x = sockUdp.recvfrom(&udpSenderAddress, buf, sizeof (buf));
-                            if (x > 0) {
-                                wait_ms(1000);
-                                victoryDebugLed(25);
-                            } else {
-                               bad(8); // Did not receive
-                            }
+                        x = sockUdp.recvfrom(&udpSenderAddress, buf, sizeof (buf));
+                        if (x > 0) {
+                            wait_ms(1000);
+                            victoryDebugLed(25);
                         } else {
-                           bad(7); // Unable to send
+                           bad(7); // Did not receive
                         }
-                        sockUdp.close();
-                        pInterface->disconnect();
-                        pInterface->deinit();
                     } else {
-                        bad(6); // Unable to open socket
+                       bad(6); // Unable to send
                     }
+                    sockUdp.close();
+                    pInterface->disconnect();
+                    pInterface->deinit();
                 } else {
-                    bad(5); // Unable to get host name (should never happen)
+                    bad(5); // Unable to open socket
                 }
             } else {
-               bad(4);  // Interface not connected
+                bad(4); // Unable to get host name (should never happen)
             }
         } else {
-           bad(3);  // No power
+           bad(3);  // Interface not connected
         }
     } else {
        bad(2);  // Unable to initialise modem
