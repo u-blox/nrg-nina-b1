@@ -80,10 +80,13 @@ In pictures:
 
 ![hw configuration](hw_configuration.jpg "HW configuration")
 
+## Setting Up The TI BQ25505 EVM
+As shipped, R6/R7/R8 (ROK3/ROK2/ROK1) are 887k/6.98M/5.36M respectively.  These are the resistors that set the thresholds and hysteresis of `VBAT_OK`, and hence `VBAT_SEC_ON`.  From the [spreadsheet](docs/bq25505_Design_Help_V1_3.xlsx) provided by TI this equates to 2.7 Volts/3 Volts, which is a bit odd to say the least and entirely unsuitable for the 3.7V LiPo cell I wanted to connect to `VBAT_SEC`.  I bought a range of 0603 SMD 1% tolerance resistors in > 1 MOhm values and, using the spreadsheet, I selected values of 1.43M/7.5M/4.22M respectively to give me 3.3 Volts/3.8 Volts.
+
 ## Volts
 When setting this up I had a lot of problems with the reliability of serial comms between the NINA-B1 module and the SARA-N2xx EVK.
 
-The NINA-B1 module operates its IO pins at whatever voltage is supplied at its VCC pin (the somewhat tempting VCC_IO pin on the module is internally connected to VCC).  The SARA-N2xx EVK includes level shifters that take the 3.3 Volt IO from the SARA-N2xx module down to 1.8 Volts; there are no headers giving access to the IO pins directly.  While it is theoretically possible to power the NINA-B1 from 1.8 Volts, this doesn't seem to work on the NINA-B1 EVK board; at least 2.5 Volts seemed to be required on the J15 centre pin to make it run.  By experiment, the only arrangement where serial comms worked reliably was with NINA-B1 powered from 3.3 Volts.  So in order to use these boards as-is, a DC to DC converter has to be used between the battery/supercap and the NINA-B1 EVK board in order to supply it with 3.3 Volts.  This issue will go away when we use properly hacked HW rather than off the shelf boards.
+The NINA-B1 module operates its IO pins at whatever voltage is supplied at its VCC pin (the somewhat tempting VCC_IO pin on the module is internally connected to VCC).  The SARA-N2xx EVK includes level shifters that take the 3.3 Volt IO from the SARA-N2xx module down to 1.8 Volts; there are no headers giving access to the IO pins directly.  It is possible to power the NINA-B1 from 1.8 Volts but this means the Arduino IO lines run a the same levels and it turns out that 1.8 Volts on the FET that controls VOR on the TI BQ25505 EVM is not enough to switch it off, hence power remains applied to the SARA-N2xx module all the time (also you can't flash a debug LED from 1.8V).  Hence, for the purposes of this experiment, a couple of [ISL9120 high efficiency DC-DC converter evaluation boards](https://www.intersil.com/en/tools/reference-designs/isl9120iix-evz.html) were purchased.  These were used to supply power to the NINA-B1 and the SARA-N2xx modules at a guaranteed voltage level.
 
 # Software
 ## Introduction

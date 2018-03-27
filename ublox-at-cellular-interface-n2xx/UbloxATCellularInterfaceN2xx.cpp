@@ -318,7 +318,7 @@ nsapi_size_or_error_t UbloxATCellularInterfaceN2xx::sendto(SockCtrl *socket, con
         return NSAPI_ERROR_NO_MEMORY;
     }
             
-    int cmdsize = sprintf(cmdStr, "AT+NSOSTF=%d,\"%s\",%d,0x0,%d,\"", socket->modem_handle, address.get_ip_address(), address.get_port(), size);    
+    int cmdsize = sprintf(cmdStr, "AT+NSOSTF=%d,\"%s\",%d,%s,%d,\"", socket->modem_handle, address.get_ip_address(), address.get_port(), _sendFlags, size);    
     tr_debug("%s", cmdStr);
     
     LOCK();
@@ -660,6 +660,7 @@ UbloxATCellularInterfaceN2xx::UbloxATCellularInterfaceN2xx(PinName tx,
     
     _localListenPort = 10000;
     _network_search_timeout_seconds = 180;
+    set_release_assistance(false);
     
     tr_debug("UbloxATCellularInterfaceN2xx Constructor");
 
@@ -722,6 +723,15 @@ void UbloxATCellularInterfaceN2xx::set_sim_pin(const char *pin) {
 // Set the network search timeout.
 void UbloxATCellularInterfaceN2xx::set_network_search_timeout(int timeout_seconds) {
     _network_search_timeout_seconds = timeout_seconds;
+}
+
+// Set release assistance.
+void UbloxATCellularInterfaceN2xx::set_release_assistance(bool isOn) {
+    if (isOn) {
+        _sendFlags = "0x200";
+    } else {
+        _sendFlags = "0x0";
+    }
 }
 
 // Get the IP address of a host.

@@ -142,6 +142,16 @@ public:
      */
     void set_network_search_timeout(int timeout_seconds);
     
+    /** Set release assistance on or off.  When release
+     * assistance is set the module will not wait any additional
+     * period for network-originated traffic.  Set release 
+     * assistance to on in situations where all traffic is mobile
+     * originated and power saving is critical.
+     *
+     *  @param isOn set to true for release assistance on (default is off).
+     */
+    void set_release_assistance(bool isOn);
+    
     /** Set the local listen port when opening a UDP socket
      * 
      */     
@@ -591,6 +601,7 @@ private:
     Thread event_thread;
     void handle_event();
     bool _run_event_thread;
+    const char *_sendFlags;
     SockCtrl * find_socket(int modem_handle = SOCKET_UNUSED);
     void clear_socket(SockCtrl * socket);
     bool check_socket(SockCtrl * socket);
