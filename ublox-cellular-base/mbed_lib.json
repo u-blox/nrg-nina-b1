@@ -1,0 +1,8 @@
+{
+    "name": "ublox-cell", 
+    "config": {
+        "baud-rate": 115200,
+        "at-parser-buffer-size": 256,
+        "at-parser-timeout": 8000
+    }
+}

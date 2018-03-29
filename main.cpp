@@ -22,18 +22,19 @@
 #include "ble/Gap.h"
 #include "ButtonService.h"
 #include "UbloxATCellularInterfaceN2xx.h"
+#include "UbloxATCellularInterface.h"
 
 /* This code is intended to run on a UBLOX NINA-B1 module
  * that is powered directly from a storage device that is charged from
  * an energy harvesting board, e.g. the TI BQ25505 EVK, where the
  * VBAT_SEC_ON (bar) pin can be checked to determine if there is enough
  * energy in the system to do some real work.  If there is then a
- * a UBLOX SARA-N2xx module is powered from the stored harvested energy
- * and data is sent over a UDP connection to a server on the internet
+ * a UBLOX SARA-N2xx or SARA-R4 module is powered from the stored harvested
+ * energy and data is sent over a UDP connection to a server on the internet
  * and then the module is powered off once more.
  *
  * NOTE: the NINA-B1 module has a single serial port, which is connected
- * to the SARA-N2xx module, so no debugging with printf()s please, debug
+ * to the SARA-N2xx/Sara-R4 module, so no debugging with printf()s please, debug
  * is only through toggling GPIO NINA_B1_GPIO_1 (D9), which is where the
  * red LED is attached on a UBLOX_EVK_NINA_B1 board.
  */
@@ -98,8 +99,22 @@ static DigitalIn vBatSecOnBar(D10);
 // This is NINA_B1_GPIO_4
 static DigitalOut vOrOnBar(D11, 1);
 
+// Pin that determines whether a SARA-N2xx or SARA-R4 modem
+// is attached: pulled high for R4 modem by default, GND the
+// pin for N2xx modem
+static DigitalIn r4ModemNotN2xxModem(D12);
+
+// Modem power on pin (only used for SARA-R4)
+static DigitalOut modemPowerOn(A5, 1);
+
+// Modem reset pin (only used for SARA-R4)
+static DigitalOut modemReset(A4, 0);
+
 // Debug LED
 static DigitalOut debugLedBar(LED1, 1);
+
+// Flag to indicate the modem that is attached
+static bool useR4Modem = false;
 
 // A pointer to a thread to display Morse on the LED
 static Thread *pMorseThread = NULL;
@@ -161,21 +176,42 @@ extern "C" {
 
 void onboard_modem_init()
 {
-    // Power off and on again
-    vOrOnBar = 1;
-    wait_ms(500);
-    vOrOnBar = 0;
+    if (useR4Modem) {
+        // Take us out of reset
+        modemReset = 1;
+    } else {
+        // Turn the power off and on again,
+        // there is no reset line
+        vOrOnBar = 1;
+        wait_ms(500);
+        vOrOnBar = 0;
+    }
 }
 
 void onboard_modem_deinit()
 {
-    // Nothing to do
+    if (useR4Modem) {
+        // Back into reset
+        modemReset = 0;
+    } else {
+        // Nothing to do
+    }
 }
 
 void onboard_modem_power_up()
 {
     // Power on
     vOrOnBar = 0;
+    wait_ms(50);
+    
+    if (useR4Modem) {
+        // Keep the power line low for 1 second
+        modemPowerOn = 0;
+        wait_ms(1000);
+        modemPowerOn = 1;
+        // Give modem a little time to respond
+        wait_ms(100);
+    }
 }
 
 void onboard_modem_power_down()
@@ -339,31 +375,51 @@ static bool powerIsGood()
     return !vBatSecOnBar;
 }
 
-// Get the time from an NTP server over a UDP cellular connection
-static void getTime()
+// Get a response from a UDP server
+static void getUdpResponse()
 {
     UDPSocket sockUdp;
     SocketAddress udpServer;
     SocketAddress udpSenderAddress;
-    UbloxATCellularInterfaceN2xx *pInterface;
+    void *pInterface;
     bool connected = false;
     char buf[1024];
     int x;
 
+    if (useR4Modem) {
+        pInterface = new UbloxATCellularInterface();
+    } else {
+        pInterface = new UbloxATCellularInterfaceN2xx();
+    }
     pulseDebugLed(SHORT_PULSE_MS);
-    pInterface = new UbloxATCellularInterfaceN2xx();
 
-    pInterface->set_credentials(APN, USERNAME, PASSWORD);
-    pInterface->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
-    pInterface->set_release_assistance(true);
+    if (useR4Modem) {
+        ((UbloxATCellularInterface *) pInterface)->set_credentials(APN, USERNAME, PASSWORD);
+        ((UbloxATCellularInterface *) pInterface)->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
+        ((UbloxATCellularInterface *) pInterface)->set_release_assistance(true);
+    } else {
+        ((UbloxATCellularInterfaceN2xx *) pInterface)->set_credentials(APN, USERNAME, PASSWORD);
+        ((UbloxATCellularInterfaceN2xx *) pInterface)->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
+        ((UbloxATCellularInterfaceN2xx *) pInterface)->set_release_assistance(true);
+    }
 
     // Set up the modem
     pulseDebugLed(SHORT_PULSE_MS);
-    if (pInterface->init(SIM_PIN)) {
+    if (useR4Modem) {
+        x = ((UbloxATCellularInterface *) pInterface)->init(SIM_PIN);
+    } else {
+        x = ((UbloxATCellularInterfaceN2xx *) pInterface)->init(SIM_PIN);
+    }
+    
+    if (x) {
         // Register with the network
         for (x = 0; !connected && powerIsGood() && (x < CONNECT_TRIES); x++) {
             pulseDebugLed(SHORT_PULSE_MS);
-            connected = (pInterface->connect() == 0);
+            if (useR4Modem) {
+                connected = (((UbloxATCellularInterface *) pInterface)->connect() == 0);
+            } else {
+                connected = (((UbloxATCellularInterfaceN2xx *) pInterface)->connect() == 0);
+            }
         }
 
         // Note: don't check for power being good again here.  The cellular modem
@@ -371,10 +427,17 @@ static void getTime()
         // Better to rely on the capacity of the system to tide us over.
         if (connected) {
             pulseDebugLed(SHORT_PULSE_MS);
-            // 195.195.221.100 is an IP address of 2.pool.ntp.org
-            if (pInterface->gethostbyname("195.195.221.100", &udpServer) == 0) {
+            // 195.195.221.100:123 is an address of 2.pool.ntp.org
+            // 151.9.34.90:5060 is the address of ciot.it-sgn.u-blox.com and the port is where a UDP echo application should be listening
+            // 195.34.89.241:7 is the address of the u-blox echo server and port for UDP packets
+            if (useR4Modem) {
+                x = ((UbloxATCellularInterface *) pInterface)->gethostbyname("151.9.34.90", &udpServer) == 0;
+            } else {
+                x = ((UbloxATCellularInterfaceN2xx *) pInterface)->gethostbyname("151.9.34.90", &udpServer) == 0;
+            }
+            if (x) {
                 pulseDebugLed(SHORT_PULSE_MS);
-                udpServer.set_port(123);
+                udpServer.set_port(5060);
                 if (sockUdp.open(pInterface) == 0) {
                     pulseDebugLed(SHORT_PULSE_MS);
                     sockUdp.set_timeout(10000);
@@ -393,8 +456,13 @@ static void getTime()
                        bad(6); // Unable to send
                     }
                     sockUdp.close();
-                    pInterface->disconnect();
-                    pInterface->deinit();
+                    if (useR4Modem) {
+                        ((UbloxATCellularInterface *) pInterface)->disconnect();
+                        ((UbloxATCellularInterface *) pInterface)->deinit();
+                    } else {
+                        ((UbloxATCellularInterfaceN2xx *) pInterface)->disconnect();
+                        ((UbloxATCellularInterfaceN2xx *) pInterface)->deinit();
+                    }
                 } else {
                     bad(5); // Unable to open socket
                 }
@@ -408,7 +476,11 @@ static void getTime()
        bad(2);  // Unable to initialise modem
     }
 
-    delete pInterface;
+    if (useR4Modem) {
+        delete (UbloxATCellularInterface *) pInterface;
+    } else {
+        delete (UbloxATCellularInterfaceN2xx *) pInterface;
+    }
 }
 
 // Printf() out some RAM stats
@@ -430,7 +502,7 @@ static void eventTickCallback(void)
 #endif
 
     if (powerIsGood()) {
-        getTime();
+        getUdpResponse();
         // Make sure the modem module is definitely off
         onboard_modem_power_down();
     } else {
@@ -575,6 +647,11 @@ int main()
     pulseDebugLed(1000);
     wait_ms(1000);
     
+    // Check what kind of modem is attached
+    if (r4ModemNotN2xxModem) {
+        useR4Modem = true;
+    }
+
     // Call this directly once at the start since I'm an impatient sort
     eventTickCallback();
 

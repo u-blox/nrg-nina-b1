@@ -1,0 +1,74 @@
+{
+    "config": {
+        "debug-on": {
+            "help": "Set to true to get AT interface debug",
+            "value": false
+        },
+        "run-sim-pin-change-tests": {
+            "help": "If 1, run the SIM PIN change tests, for which default-pin must be defined",
+            "value": 0
+        },
+        "default-pin": {
+            "help": "The current value of the SIM PIN as a string; if PIN is enabled on your SIM, or you wish to run the SIM PIN change tests, you must put the PIN for your SIM here",
+            "value": "\"1234\""
+        },
+        "apn": {
+            "help": "The APN string to use for this SIM/network, set to 0 if none",
+            "value": 0
+        },
+        "username": {
+            "help": "The user name string to use for this APN, set to zero if none",
+            "value": 0
+        },
+        "password": {
+            "help": "The password string to use for this APN, set to 0 if none",
+            "value": 0
+        },
+        "alt-pin": {
+            "help": "The SIM PIN (as a string) that will be used for SIM PIN change tests (the SIM PIN will be changed back to default-pin afterwards)",
+            "value": "\"9876\""
+        },
+        "incorrect-pin": {
+            "help": "A SIM PIN (as a string) that should not be the same as default-pin or alt-pin",
+            "value": "\"1530\""
+        },
+        "echo-server": {
+            "help": "The URL string of the UDP/TCP echo server to use during testing; if this is not defined, no echo tests will be run (and it is REALLY recommended to run them for this driver)",
+            "value": "\"yourechoserver.com\""
+        },
+        "echo-udp-port": {
+            "help": "The port to connect to on echo-server for UDP testing",
+            "value": 7
+        },
+        "echo-tcp-port": {
+            "help": "The port to connect to on echo-server for TCP testing",
+            "value": 7
+        },
+        "ntp-server": {
+            "help": "The URL string of the NTP server to use during testing",
+            "value": "\"2.pool.ntp.org\""
+        },
+        "ntp-port": {
+            "help": "The port to connect to on ntp-server",
+            "value": 123
+        },
+        "local-port": {
+            "help": "The local port to use when testing sock.bind()",
+            "value": 16
+        },
+        "udp-max-packet-size": {
+            "help": "The maximum UDP packet size to use when testing; 1024 bytes is the limit at the AT interface but 508 bytes is considered more reliable for the public internet",
+            "value": 508
+        },
+        "udp-max-frag-packet-size": {
+            "help": "The maximum size of UDP data to test with that we know will be fragmented across multiple UDP packets",
+            "value": 1500
+        }
+    },
+    "target_overrides": {
+        "*": {
+            "target.features_add": ["COMMON_PAL"],
+            "platform.stdio-convert-newlines": true
+        }
+    }
+}

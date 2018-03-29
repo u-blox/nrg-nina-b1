@@ -1,0 +1,39 @@
+{
+    "config": {
+        "debug-on": {
+            "help": "Set to true to get AT interface debug",
+            "value": false
+        },
+        "default-pin": {
+            "help": "The current value of the SIM PIN as a string; if PIN is enabled on your SIM, or you wish to run the SIM PIN change tests, you must put the PIN for your SIM here",
+            "value": "\"1234\""
+        },
+        "apn": {
+            "help": "The APN string to use for this SIM/network, set to 0 if none",
+            "value": 0
+        },
+        "username": {
+            "help": "The user name string to use for this APN, set to zero if none",
+            "value": 0
+        },
+        "password": {
+            "help": "The password string to use for this APN, set to 0 if none",
+            "value": 0
+        },
+        "ntp-server": {
+            "help": "The URL string of the NTP server to use during testing",
+            "value": "\"2.pool.ntp.org\""
+        },
+        "ntp-port": {
+            "help": "The port to connect to on ntp-server",
+            "value": 123
+        }
+    },
+    "macros": ["MBED_HEAP_STATS_ENABLED=1"],
+    "target_overrides": {
+        "*": {
+            "target.features_add": ["COMMON_PAL"],
+            "platform.stdio-convert-newlines": true
+        }
+    }
+}
