@@ -128,11 +128,27 @@ WEAK void mbed_assert_internal(const char *expr, const char *file, int line)
 ```
 
 ## Operation
-The NINA-B1 software spends most of its time asleep, where the current consumption averages ~1.2 uAmps.  It powers-up periodically and checks the `VBAT_SEC_ON` line; if that line is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N2xx/SARA-R410M module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
+The NINA-B1 software spends most of its time asleep, where the current consumption averages ~1.2 uAmps.  It powers-up every 60 seconds and checks the `VBAT_SEC_ON` line; if that line is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N2xx/SARA-R410M module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
 
 As a video (the action begins 16 seconds in):
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=HQhBW8Z5sNg" target="_blank"><img src="http://img.youtube.com/vi/HQhBW8Z5sNg/0.jpg" alt="Software and HW for NRG harvesting test in action" width="480" height="270" border="10" /></a>
+
+Here is a photograph of a fully configured rig which uses the tiny [IXYS SLMD121H04L](docs/slmd121h04l_nov16.pdf) solar panel with a 100 Watt warm light LED bulb above it and a 150 mWh LiPo (the kind of thing used in small drones) as `VBAT_SEC`.  There are two 3.3 Volt regulators in circuit in order to allow use of a standard SARA-N2xx EVK board with its voltage conversions and there's an LED on the NINA-B1 board (and quite a lot of associated SW delays) in order to see what's going on.  The SARA-N2xx module has a cabled RF connection to an NBIoT network and so is in perfect coverage.
+
+![HW configuration](16_hour_run_hw_configuration.jpg "HW configuration")
+
+When this kit was left to run over a 16 hour period with a Saleae logic probe attached to the interesting points you can clearly see it behaved well, being able to run a 60 second cycle of register with the NBIoT network, transmit a [48 byte] UDP packet and receive a [48 byte] UDP packet, for 36% of the time:
+
+![operating overview](16_hour_run_overview.jpg "Operating overview")
+
+Here are some detailed views of the start and end of an "active" period (i.e. when `VBAT_SEC_ON` is low):
+
+![start of active period](16_hour_run_start_detail.jpg "Start of active period")
+
+![end of active period](16_hour_run_end_detail.jpg "End of active period")
+
+Clearly these are optimum conditions but, at the same time, the HW is most definitely not optimised either.
 
 ## Debugging
 With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to monitor what is going on in this code:
