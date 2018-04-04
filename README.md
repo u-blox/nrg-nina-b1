@@ -87,7 +87,7 @@ As shipped, R6/R7/R8 (ROK3/ROK2/ROK1) are 887k/6.98M/5.36M respectively.  These 
 ## Volts
 When setting this up I had a lot of problems with the reliability of serial comms between the NINA-B1 module and the SARA-N2xx EVK.
 
-The NINA-B1 module operates its IO pins at whatever voltage is supplied at its VCC pin (the somewhat tempting VCC_IO pin on the module is internally connected to VCC).  The SARA-N2xx EVK includes level shifters that take the 3.3 Volt IO from the SARA-N2xx module down to 1.8 Volts; there are no headers giving access to the IO pins directly.  It is possible to power the NINA-B1 from 1.8 Volts but this means the Arduino IO lines run a the same levels and it turns out that 1.8 Volts on the FET that controls VOR on the TI BQ25505 EVM is not enough to switch it off, hence power remains applied to the SARA-N2xx module all the time (also you can't flash a debug LED from 1.8 Volts).  Hence, for the purposes of this experiment, a couple of [ISL9120 high efficiency DC-DC converter evaluation boards](https://www.intersil.com/en/tools/reference-designs/isl9120iix-evz.html) were purchased.  These were used to supply power to the NINA-B1 and the SARA-N2xx modules at a guaranteed voltage level.
+The NINA-B1 module operates its IO pins at whatever voltage is supplied at its VCC pin (the somewhat tempting VCC_IO pin on the module is internally connected to VCC).  The SARA-N2xx EVK includes level shifters that take the 3.3 Volt IO from the SARA-N2xx module down to 1.8 Volts; there are no headers giving access to the IO pins directly.  It is possible to power the NINA-B1 from 1.8 Volts but this means the Arduino IO lines run at the same levels and it turns out that 1.8 Volts on the FET that controls VOR on the TI BQ25505 EVM is not enough to switch it off, hence power remains applied to the SARA-N2xx module all the time (also you can't flash a debug LED from 1.8 Volts).  Hence, for the purposes of this experiment, a couple of [ISL9120 high efficiency DC-DC converter evaluation boards](https://www.intersil.com/en/tools/reference-designs/isl9120iix-evz.html) were purchased.  These were used to supply power to the NINA-B1 and the SARA-N2xx modules at a guaranteed voltage level.
 
 ## Using a SARA-R410M EVK
 Instead of using a SARA-N2xx EVK, it is possible to use a SARA-R410M EVK, though note that this is NOT yet fully tested:
@@ -148,10 +148,10 @@ Here are some detailed views of the start and end of an "active" period (i.e. wh
 
 ![end of active period](16_hour_run_end_detail.jpg "End of active period")
 
-Clearly these are beyond optimum conditions (24 hour midday sun and perfect cellular coverage) but a 36% active period is a *very* long way above expectations and this HW is also most definitely not optimised.
+Clearly these are beyond optimum conditions (24 hour midday sun and perfect cellular coverage) but a 36% active time is a *very* long way above expectations and this HW is also most definitely not optimised.
 
 ## Debugging
-With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to monitor what is going on in this code:
+With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to get debug text out of this code:
 
 1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since the box can do very long term captures and will automagicaly decode the serial protocol).
 2.  Use the `printfMorse()` function that will flash the debug LED based on `printf()`-style strings.
