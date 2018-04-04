@@ -148,7 +148,7 @@ Here are some detailed views of the start and end of an "active" period (i.e. wh
 
 ![end of active period](16_hour_run_end_detail.jpg "End of active period")
 
-Clearly these are optimum conditions but, at the same time, the HW is most definitely not optimised either.
+Clearly these are beyond optimum conditions (24 hour midday sun and perfect cellular coverage) but a 36% active period is a *very* long way above expectations and this HW is also most definitely not optimised.
 
 ## Debugging
 With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to monitor what is going on in this code:
