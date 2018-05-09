@@ -95,54 +95,73 @@ const char *pBleGetNextDeviceName();
 /** Get the number of data items that have been
  * read from a given device.
  *
- * @param  a pointer to the device name string
- *         that the data items are from, as returned
- *         by pGetFirstDeviceName() or
- *         pGetNextDeviceName() (not a copy, the
- *         address is the important thing).
- * @return the number of data items in the list
- *         for that device name or -1 if pDeviceName
- *         cannot be found.
+ * @param  pDeviceName a pointer to the device name
+ *                     string that the data items
+ *                     are from, as returned by
+ *                     pGetFirstDeviceName() or
+ *                     pGetNextDeviceName() (not a
+ *                     copy, the address is the
+ *                     important thing).
+ * @return             the number of data items in
+ *                     the list for that device
+ *                     name or -1 if pDeviceName
+ *                     cannot be found.
  */
 int bleGetNumDataItems(const char *pDeviceName);
 
 /** Get the first data item for the given device
  *  name.
  *
- * @param   a pointer to the device name string
- *          that the data items are from, as returned
- *          by pGetFirstDeviceName() or
- *          pGetNextDeviceName() (not a copy, the
- *          address is the important thing).
- * @return  pointer to the first data item or NULL
- *          if there are none.  This is a COPY of the
- *          data item, malloc()ed for the purpose by
- *          this function, and it is up to the caller
- *          to free() it when done.  Note also that the
- *          pData item inside the BleData structure is
- *          ALSO malloc()ed and should be free()ed before
- *          the BleData structure is free()ed to avoid
- *          memory leaks.
+ * @param  pDeviceName a pointer to the device name
+ *                     string that the data items
+ *                     are from, as returned by
+ *                     pGetFirstDeviceName() or
+ *                     pGetNextDeviceName() (not a
+ *                     copy, the address is the
+ *                     important thing).
+ * @param  andDelete   if true, then the first data item
+ *                     is deleted from the data store
+ *                     after it has been returned; a
+ *                     subsequent call to this function
+ *                     will then effectively return the
+ *                     next data item.
+ * @return             pointer to the first data item
+ *                     or NULL if there are none.
+ *                     This is a COPY of the data
+ *                     item, malloc()ed for the purpose
+ *                     by this function, and it is up
+ *                     to the caller to free() it when
+ *                     done.  Note also that the pData
+ *                     item inside the BleData structure
+ *                     is ALSO malloc()ed by this
+ *                     function and should be free()ed
+ *                     before the BleData structure is
+ *                     free()ed to avoid memory leaks.
  */
-BleData *pBleGetFirstDataItem(const char *pDeviceName);
+BleData *pBleGetFirstDataItem(const char *pDeviceName,
+                              bool andDelete);
 
 /** Get the next data item for the given device
  *  name.
  *
- * @param   a pointer to the device name string
- *          that the data items are from, as returned
- *          by pGetFirstDeviceName() or
- *          pGetNextDeviceName() (not a copy, the
- *          address is the important thing).
- * @return  pointer to the next data item or NULL
- *          if the end of the list has been reached.
- *          This is a COPY of the data item, malloc()ed
- *          for the purpose by this function, and it is
- *          up to the caller to free() it when done.
- *          Note also that the pData item inside the BleData
- *          structure is ALSO malloc()ed and should be
- *          free()ed before the BleData structure is
- *          free()ed to avoid memory leaks.
+ * @param  pDeviceName a pointer to the device name
+ *                     string that the data items are
+ *                     from, as returned by
+ *                     pGetFirstDeviceName() or
+ *                     pGetNextDeviceName() (not a copy,
+ *                     the address is the important thing).
+ * @return             pointer to the next data item
+ *                     or NULL if there are no more.
+ *                     This is a COPY of the data
+ *                     item, malloc()ed for the purpose
+ *                     by this function, and it is up
+ *                     to the caller to free() it when
+ *                     done.  Note also that the pData
+ *                     item inside the BleData structure
+ *                     is ALSO malloc()ed by this
+ *                     function and should be free()ed
+ *                     before the BleData structure is
+ *                     free()ed to avoid memory leaks.
  */
 BleData *pBleGetNextDataItem(const char *pDeviceName);
 

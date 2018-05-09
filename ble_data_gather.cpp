@@ -256,7 +256,7 @@ static BleDevice *pFindBleNotDisconnectedInList();
  */
 static BleDevice *pAddBleDeviceToList(const char *pAddress, int addressType);
 
-/** Remove a BLE device from the list.
+/** Remove a BLE device from the list, including its data.
  * Note that this does NOT lock the BLE list.
  *
  * @param  pAddress    a pointer to the BLS address of the device.
@@ -264,7 +264,7 @@ static BleDevice *pAddBleDeviceToList(const char *pAddress, int addressType);
  * @return             the number of items in the list after the
  *                     removal has occurred.
  */
-static int removeBleDeviceFromList(const char *pAddress, int addressType);
+static int freeBleDevice(const char *pAddress, int addressType);
 
 /** Clear the BLE device list.
  */
@@ -295,7 +295,17 @@ static int addBleData(const char *pAddress, int addressType, const char *pData, 
  *                     for the purpose, as is also the pData item inside
  *                     it).
  */
-static BleData *pGetNextDataItem(BleDevice *pBleDevice);
+static BleData *pGetNextDataItemCopy(BleDevice *pBleDevice);
+
+/** Remove a single item of data from a BLE device.  This
+ * may result in pNextDataItemToRead being invalid: it is up
+ * to the caller to sort this out.
+ * Note that this does NOT lock the BLE list.
+ *
+ * @param pDataContainer a pointer to the entry in the list
+ *                       to remove.
+ */
+static void freeBleDataItem(BleDataContainer *pDataContainer);
 
 /** Clear the data for a BLE device from the given entry
  * in its data list onwards.
@@ -545,7 +555,7 @@ static BleDevice *pAddBleDeviceToList(const char *pAddress, int addressType)
 // Remove a BLE device from the list, returning the number
 // of devices in the list afterwards.
 // Note that this does NOT lock the BLE list.
-static int removeBleDeviceFromList(const char *pAddress, int addressType)
+static int freeBleDevice(const char *pAddress, int addressType)
 {
     BleDevice *pBleDevice;
 
@@ -568,6 +578,8 @@ static int removeBleDeviceFromList(const char *pAddress, int addressType)
             free (pBleDevice->pDeviceName);
         }
         clearBleDeviceData(pBleDevice->pDataContainer);
+        pBleDevice->pDataContainer = NULL;
+        pBleDevice->pNextDataItemToRead = pBleDevice->pDataContainer;
         gNumBleDevicesInList--;
     }
 
@@ -578,8 +590,8 @@ static int removeBleDeviceFromList(const char *pAddress, int addressType)
 static void clearBleDeviceList()
 {
     LOCK();
-    while (removeBleDeviceFromList(gBleDeviceList[gNumBleDevicesInList - 1].address,
-                                   gBleDeviceList[gNumBleDevicesInList - 1].addressType) > 0) {}
+    while (freeBleDevice(gBleDeviceList[gNumBleDevicesInList - 1].address,
+                         gBleDeviceList[gNumBleDevicesInList - 1].addressType) > 0) {}
     UNLOCK();
 }
 
@@ -678,7 +690,7 @@ static int addBleData(const char *pAddress, int addressType, const char *pData, 
 // Get the given data item from the given BLE device
 // and increment the pNextDataItemToRead for that device.
 // Note that this does NOT lock the BLE list.
-static BleData *pGetNextDataItem(BleDevice *pBleDevice)
+static BleData *pGetNextDataItemCopy(BleDevice *pBleDevice)
 {
     BleData *pDataStruct = NULL;
     const char *pTmp;
@@ -709,27 +721,34 @@ static BleData *pGetNextDataItem(BleDevice *pBleDevice)
     return pDataStruct;
 }
 
+// Remove a BLE data item from the list
+// Note that this does NOT lock the BLE list.
+static void freeBleDataItem(BleDataContainer *pDataContainer)
+{
+    // Free the data for this entry
+    if (pDataContainer->dataStruct.pData != NULL) {
+        free (pDataContainer->dataStruct.pData);
+    }
+    // Seal up the list
+    if (pDataContainer->pPrevious != NULL) {
+        pDataContainer->pPrevious->pNext = pDataContainer->pNext;
+    }
+    if (pDataContainer->pNext != NULL) {
+        pDataContainer->pNext->pPrevious = pDataContainer->pPrevious;
+    }
+    // Free this container
+    free (pDataContainer);
+}
+
 // Clear the data for a BLE device from the given entry onwards.
 // Note that this does NOT lock the BLE list.
 static void clearBleDeviceData(BleDataContainer *pDataContainer)
 {
     BleDataContainer *pTmp;
-
+    
     while (pDataContainer != NULL) {
-        // Free the data for this entry
-        if (pDataContainer->dataStruct.pData != NULL) {
-            free (pDataContainer->dataStruct.pData);
-        }
-        // Seal up the list
-        if (pDataContainer->pPrevious != NULL) {
-            pDataContainer->pPrevious->pNext = pDataContainer->pNext;
-        }
-        if (pDataContainer->pNext != NULL) {
-            pDataContainer->pNext->pPrevious = pDataContainer->pPrevious;
-        }
-        // Free this container
         pTmp = pDataContainer->pNext;
-        free (pDataContainer);
+        freeBleDataItem(pDataContainer);
         pDataContainer = pTmp;
     }
 }
@@ -1259,16 +1278,24 @@ int bleGetNumDataItems(const char *pDeviceName)
 }
 
 // Get the first data item for the given device name.
-BleData *pBleGetFirstDataItem(const char *pDeviceName)
+BleData *pBleGetFirstDataItem(const char *pDeviceName, bool andDelete)
 {
     BleData *pDataItem = NULL;
     BleDevice *pBleDevice;
+    BleDataContainer *pTmp;
 
     LOCK();
     pBleDevice = pFindBleDeviceInListByDeviceNamePtr(pDeviceName);
     if (pBleDevice != NULL) {
         pBleDevice->pNextDataItemToRead = pBleDevice->pDataContainer;
-        pDataItem = pGetNextDataItem(pBleDevice);
+        pDataItem = pGetNextDataItemCopy(pBleDevice);
+        if ((pDataItem != NULL) && andDelete) {
+            pTmp = pBleDevice->pDataContainer->pNext;
+            freeBleDataItem(pBleDevice->pDataContainer);
+            pBleDevice->pDataContainer = pTmp;
+            pBleDevice->pNextDataItemToRead = pBleDevice->pDataContainer;
+
+        }
     }
     UNLOCK();
 
@@ -1284,7 +1311,7 @@ BleData *pBleGetNextDataItem(const char *pDeviceName)
     LOCK();
     pBleDevice = pFindBleDeviceInListByDeviceNamePtr(pDeviceName);
     if (pBleDevice != NULL) {
-        pDataItem = pGetNextDataItem(pBleDevice);
+        pDataItem = pGetNextDataItemCopy(pBleDevice);
     }
     UNLOCK();
 
