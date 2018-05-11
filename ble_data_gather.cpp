@@ -23,7 +23,7 @@
 
 /** Debug BLE_DEBUG_PRINTF()s.
  */
-#define BLE_DEBUG_PRINTF(...) if (gDebugOn) {printf(__VA_ARGS__);}
+#define BLE_DEBUG_PRINTF(format, ...) if (gDebugOn) {printf(format, ##__VA_ARGS__);}
 
 /** The maximum number of BLE addresses we can handle
  * Note that this should be big enough to hold the number
@@ -781,7 +781,7 @@ static void advertisementCallback(const Gap::AdvertisementCallbackParams_t *pPar
             //    BLE_DEBUG_PRINTF(" (%s)", gapAdvertisingDataTypeString[type]);
             //}
             //BLE_DEBUG_PRINTF(" (%d byte(s)): 0x%.*s.\n", recordLength - 1,
-            //         bytesToHexString(pValue, recordLength - 1, buf, sizeof(buf)), buf);
+            //                 bytesToHexString(pValue, recordLength - 1, buf, sizeof(buf)), buf);
             if ((type == GapAdvertisingData::FLAGS) &&
                 (*pValue & (GapAdvertisingData::LE_GENERAL_DISCOVERABLE | GapAdvertisingData::LE_LIMITED_DISCOVERABLE))) {
                 discoverable = true;
@@ -1104,17 +1104,18 @@ static void readWantedValueCallback(const GattReadCallbackParams *pResponse)
 {
     BleDevice *pBleDevice;
     char buf[32];
+    int numItems;
 
     LOCK();
     pBleDevice = pFindBleConnectionInList(pResponse->connHandle);
     if (pBleDevice != NULL) {
         BLE_DEBUG_PRINTF("Read from BLE device %s of characteristic 0x%04x",
-               pPrintBleAddress(pBleDevice->address, buf), gWantedCharacteristicUuid);
+                         pPrintBleAddress(pBleDevice->address, buf), gWantedCharacteristicUuid);
         if (pResponse->len > 0) {
             BLE_DEBUG_PRINTF(" returned %d byte(s): 0x%.*s", pResponse->len,
                              bytesToHexString((const char *) pResponse->data, pResponse->len, buf, sizeof(buf)), buf);
-            BLE_DEBUG_PRINTF(", %d data item(s) now in its list.\n", addBleData(pBleDevice->address, pBleDevice->addressType,
-                                                           (const char *) pResponse->data, pResponse->len));
+            numItems = addBleData(pBleDevice->address, pBleDevice->addressType, (const char *) pResponse->data, pResponse->len);
+            BLE_DEBUG_PRINTF(", %d data item(s) now in its list.\n", numItems);
         } else {
             BLE_DEBUG_PRINTF(" returned 0 byte(s) of data.\n");
         }
@@ -1184,16 +1185,16 @@ static void scheduleBleEventsProcessing(BLE::OnEventsToProcessCallbackContext* p
 
 // Initialise.
 void bleInit(const char *gpDeviceNamePrefix, int wantedCharacteristicUuid,
-             int maxNumDataItemsPerDevice, bool debugOn)
+             int maxNumDataItemsPerDevice, EventQueue *pEventQueue, bool debugOn)
 {
     gpDeviceNamePrefix = gpDeviceNamePrefix;
     gWantedCharacteristicUuid = wantedCharacteristicUuid;
     gMaxNumDataItemsPerDevice = maxNumDataItemsPerDevice;
+    gpBleEventQueue = pEventQueue;
     gDebugOn = debugOn;
     gNumBleDevicesInList = 0;
     gBleGetNextDeviceIndex = 0;
 
-    gpBleEventQueue = new EventQueue (/* event count */ 16 * EVENTS_EVENT_SIZE);
     // TODO treat gMaxNumDataItemsPerDevice
 }
 
@@ -1202,9 +1203,6 @@ void bleDeinit()
 {
     clearBleDeviceList();
     BLE::Instance().shutdown();
-    if (gpBleEventQueue != NULL) {
-        delete gpBleEventQueue;
-    }
     gpBleEventQueue = NULL;
 }
 
@@ -1245,8 +1243,11 @@ const char *pBleGetNextDeviceName()
     const char *pDeviceName = NULL;
 
     LOCK();
-    if (gNumBleDevicesInList > gBleGetNextDeviceIndex) {
-        pDeviceName = gBleDeviceList[gBleGetNextDeviceIndex].pDeviceName;
+    // Find the next wanted device
+    while ((pDeviceName == NULL) && (gBleGetNextDeviceIndex < gNumBleDevicesInList)) {
+        if (gBleDeviceList[gBleGetNextDeviceIndex].deviceState == BLE_DEVICE_STATE_IS_WANTED) {
+            pDeviceName = gBleDeviceList[gBleGetNextDeviceIndex].pDeviceName;
+        }
         gBleGetNextDeviceIndex++;
     }
     UNLOCK();

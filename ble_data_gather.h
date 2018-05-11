@@ -52,10 +52,13 @@ typedef struct {
  * @param maxNumDataItemsPerDevice the maximum number of data items to collect,
  *                                 older items will be lost when the maximum
  *                                 number of data items is reached.
+ * @param pEventQueue              an event queue to use for BLE events, should
+ *                                 have headroom of 16 * EVENTS_EVENT_SIZE.
  * @param debugOn                  true to switch on debug printf()s.
  */
  void bleInit(const char *pDeviceNamePrefix, int wantedCharacteristicUuid,
-              int maxNumDataItemsPerDevice, bool debugOn);
+              int maxNumDataItemsPerDevice, EventQueue *pEventQueue,
+              bool debugOn);
 
  /* Shutdown.
   */
