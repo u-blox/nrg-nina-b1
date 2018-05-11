@@ -43,11 +43,16 @@
 /** The maximum number of failed connection attempts before
  * we give up on a device.
  */
-#define BLE_MAX_DISCOVERY_ATTEMPTS 3
+#define BLE_MAX_DISCOVERY_ATTEMPTS 2
 
 /** The connection time-out.
  */
-#define BLE_CONNECTION_TIMEOUT_SECONDS 3
+#define BLE_CONNECTION_TIMEOUT_SECONDS 1
+
+/** The period at which to obtain readings (should be longer than
+ * the connection time-out).
+ */
+#define BLE_READ_INTERVAL_SECONDS 2
 
 /**************************************************************************
  * TYPES
@@ -602,23 +607,40 @@ static void getBleReadingsCallback()
     char addressString[BLE_ADDRESS_STRING_SIZE];
     bool deviceRead = false;
     ble_error_t bleError;
+    int x;
 
     LOCK();
-    for (int x = 0; (x < gNumBleDevicesInList) && !deviceRead; x++) {
+    // Go around the list of devices, starting reading at 
+    // gNextBleDeviceToRead, and read from the next device in
+    // the list which is marked as wanted
+    for (x = 0; (x < gNumBleDevicesInList) && !deviceRead; x++) {
         pBleDevice = &(gBleDeviceList[(gNextBleDeviceToRead + x) % gNumBleDevicesInList]);
         if (pBleDevice->deviceState == BLE_DEVICE_STATE_IS_WANTED) {
-            bleError = BLE::Instance().gap().connect((const uint8_t *) pBleDevice->address, (BLEProtocol::AddressType_t) pBleDevice->addressType, &gConnectionParams, &gConnectionScanParams);
+            bleError = BLE::Instance().gap().connect((const uint8_t *) pBleDevice->address,
+                                                     (BLEProtocol::AddressType_t) pBleDevice->addressType,
+                                                     &gConnectionParams, &gConnectionScanParams);
             if (bleError == BLE_ERROR_NONE) {
                 BLE_DEBUG_PRINTF("Connecting to BLE device %s for a reading...\n", pPrintBleAddress(pBleDevice->address, addressString));
+                //BLE_DEBUG_PRINTF("## WANTED: gNextBleDeviceToRead %d, x %d, index %d.\n", gNextBleDeviceToRead, x,
+                //                (gNextBleDeviceToRead + x) % gNumBleDevicesInList);
                 pBleDevice->connectionState = BLE_CONNECTION_STATE_CONNECTING;
                 deviceRead = true;
+            } else {
+                //BLE_DEBUG_PRINTF("## Unable to read from WANTED gNextBleDeviceToRead %d, x %d, index %d (error %d).\n",
+                //                  gNextBleDeviceToRead, x, (gNextBleDeviceToRead + x) % gNumBleDevicesInList, bleError);
             }
-            gNextBleDeviceToRead++;
-            if (gNextBleDeviceToRead > gNumBleDevicesInList) {
-                gNextBleDeviceToRead = 0;
-            }
+        } else {
+            //BLE_DEBUG_PRINTF("## NOT WANTED: gNextBleDeviceToRead %d, x %d, index %d.\n", gNextBleDeviceToRead, x,
+            //                (gNextBleDeviceToRead + x) % gNumBleDevicesInList);
         }
     }
+
+    gNextBleDeviceToRead++;
+    if (gNextBleDeviceToRead >= gNumBleDevicesInList) {
+        gNextBleDeviceToRead = 0;
+    }
+    //BLE_DEBUG_PRINTF("## gNextBleDeviceToRead is now %d.\n", gNextBleDeviceToRead);
+
     UNLOCK();
 }
 
@@ -966,6 +988,8 @@ static void connectionCallback(const Gap::ConnectionCallbackParams_t *pParams)
                 }
             } else {
                 MBED_ASSERT(pBleDevice->pWantedCharacteristic != NULL);
+                // By experiment, if there is no delay here then the data returned by the read() is all 0x00, go figure...
+                wait_ms(50);
                 BLE_DEBUG_PRINTF("  Reading the wanted characteristic (0x%04x) of BLE device %s.\n",
                                  pBleDevice->pWantedCharacteristic->getUUID().getShortUUID(),
                                  pPrintBleAddress(pBleDevice->address, addressString));
@@ -987,7 +1011,8 @@ static void actOnDisconnect(BleDevice *pBleDevice)
 
     BLE_DEBUG_PRINTF("Disconnected from device %s", pPrintBleAddress(pBleDevice->address, addressString));
     if ((pBleDevice->connectionState == BLE_CONNECTION_STATE_CONNECTING) &&
-        (pBleDevice->deviceState == BLE_DEVICE_STATE_DISCOVERED)) {
+        ((pBleDevice->deviceState == BLE_DEVICE_STATE_UNKNOWN) ||
+         (pBleDevice->deviceState == BLE_DEVICE_STATE_DISCOVERED))) {
         if (pBleDevice->discoveryAttempts >= BLE_MAX_DISCOVERY_ATTEMPTS) {
             // If we were discovering this device and it's rudely bounced us too
             // many times then it probably doesn't want to know about us so cross it
@@ -1092,11 +1117,12 @@ static void checkDeviceNameCallback(const GattReadCallbackParams *pResponse)
             }
             pBleDevice->deviceState = BLE_DEVICE_STATE_IS_WANTED;
         }
-        // Disconnect immediately to save time if we can, noting that
-        // this might fail if we're already disconnecting anyway
-        BLE::Instance().gap().disconnect(pResponse->connHandle, Gap::LOCAL_HOST_TERMINATED_CONNECTION);
     }
     UNLOCK();
+
+    // Disconnect immediately to save time if we can, noting that
+    // this might fail if we're already disconnecting anyway
+    BLE::Instance().gap().disconnect(pResponse->connHandle, Gap::LOCAL_HOST_TERMINATED_CONNECTION);
 }
 
 // Take a reading from the wanted characteristic.
@@ -1166,9 +1192,9 @@ static void bleInitComplete(BLE::InitializationCompleteCallbackContext *pParams)
     ble.gap().setScanParams(1000, 500);
     ble.gap().startScan(advertisementCallback);
 
-    // Try to get readings every second.
+    // Try to get readings.
     MBED_ASSERT(gpBleEventQueue != NULL);
-    gpBleEventQueue->call_every(1000, getBleReadingsCallback);
+    gpBleEventQueue->call_every(BLE_READ_INTERVAL_SECONDS * 1000, getBleReadingsCallback);
 }
 
 // Throw a BLE event onto the BLE event queue.
@@ -1226,7 +1252,15 @@ bool bleRun(int durationMs)
 // Get the number of devices in the list.
 int bleGetNumDevices()
 {
-    return gNumBleDevicesInList;
+    int y = 0;
+
+    for (int x = 0; x < gNumBleDevicesInList; x++) {
+        if (gBleDeviceList[x].deviceState == BLE_DEVICE_STATE_IS_WANTED) {
+            y++;
+        }
+    }
+
+    return y;
 }
 
 // Get the first device name in the list.
