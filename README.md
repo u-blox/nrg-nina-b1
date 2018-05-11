@@ -103,10 +103,12 @@ When, at power-on, the software running on NINA-B1 detects that pin `D12` of the
 
 # Software
 ## Introduction
-The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/ARMmbed/mbed-os-example-ble/tree/master/BLE_Button) but with the BLE portions compiled-out; they may be used in the future.
+The software is based upon [mbed-os-example-ble/BLE_Button](https://github.com/ARMmbed/mbed-os-example-ble/tree/master/BLE_Button).
 
 ## Components
 This software includes copies of the [UbloxCellularBaseN2xx](https://os.mbed.com/teams/ublox/code/ublox-cellular-base-n2xx/)/[UbloxATCellularInterfaceN2xx](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface-n2xx/) (for SARA-N2xx) and [UbloxCellularBase](https://os.mbed.com/teams/ublox/code/ublox-cellular-base/)/[UbloxATCellularInterface](https://os.mbed.com/teams/ublox/code/ublox-at-cellular-interface/) (for SARA-R410M) drivers, rather than linking to the original libraries.  This is so that the drivers can be modified to add a configurable time-out to the network registration process and to employ release assistance (saving power).
+
+It also includes a BLE module `ble_data_gather`, which will scan for named devices (names that begin with "NINA-B1") and read named data from them (currently just the temperature, characteristic `TEMP_SRV_UUID_TEMP_CHAR` (short UUID `0xFFE1`)).  This will work out of the box with any [u-blox B200 NINA-B1 blueprint](https://github.com/u-blox/blueprint-B200-NINA-B1).
 
 NOTE: if you define `ENABLE_ASSERTS_IN_MORSE` the code overrides the functions `mbed_error_vfprintf()` in `mbed-os/platform/mbed_board.c` and `mbed_assert_internal()` in `mbed-os/platform/mbed_assert.c` so that Mbed asserts can be exposed through `printfMorse()`.  To permit this you will need to edit `mbed-os/platform/mbed_board.c` so that:
 
@@ -127,7 +129,21 @@ NOTE: if you define `ENABLE_ASSERTS_IN_MORSE` the code overrides the functions `
 WEAK void mbed_assert_internal(const char *expr, const char *file, int line)
 ```
 
-## Operation
+## Debugging
+With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to get debug text out of this code:
+
+1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since the box can do very long term captures and will automagicaly decode the serial protocol).
+2.  Use the `printfMorse()` function that will flash the debug LED based on `printf()`-style strings.
+
+When using `printfMorse()` the start and end of a Morse sequence is signalled by a rapid flash on the LED.  Remember to keep your Morse strings short as they will take a while to come out.  The `printfMorse()` function blocks but there is also a `tPrintfMorse()` function which runs in its own task, allowing the rest of the code to run (but masking any other use of the debug LED while it is active).
+
+Here is a video of a sample Morse sequence:
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=8VpEXieqOn8" target="_blank"><img src="http://img.youtube.com/vi/8VpEXieqOn8/0.jpg" alt="printfMorse()" width="480" height="270" border="10" /></a>
+
+A good Morse chart can be found on [Wikipedia](https://en.wikipedia.org/wiki/Morse_code#/media/File:International_Morse_Code.svg).
+
+# Operation
 The NINA-B1 software spends most of its time asleep, where the current consumption averages ~1.2 uAmps.  It powers-up every 60 seconds and checks the `VBAT_SEC_ON` line; if that line is low (meaning that there is sufficient power in the battery/supercap), it powers up the SARA-N2xx/SARA-R410M module, which registers with the cellular network, and transmits whatever data it has before putting everything back to sleep once more.
 
 As a video (the action begins 16 seconds in):
@@ -149,17 +165,3 @@ Here are some detailed views of the start and end of an "active" period (i.e. wh
 ![end of active period](images/16_hour_run_end_detail.jpg "End of active period")
 
 Clearly these are beyond optimum conditions (24 hour midday sun and perfect cellular coverage) but a 36% active time is a *very* long way above expectations and this HW/SW is also most definitely not optimised.
-
-## Debugging
-With only GPIO-based debugging (the single serial port from the NINA-B1 module being connected to the SARA-N2xx/SARA-R410M module), there are two ways to get debug text out of this code:
-
-1.  Monitor the serial lines for AT command activity (I used a Saleae box for this since the box can do very long term captures and will automagicaly decode the serial protocol).
-2.  Use the `printfMorse()` function that will flash the debug LED based on `printf()`-style strings.
-
-When using `printfMorse()` the start and end of a Morse sequence is signalled by a rapid flash on the LED.  Remember to keep your Morse strings short as they will take a while to come out.  The `printfMorse()` function blocks but there is also a `tPrintfMorse()` function which runs in its own task, allowing the rest of the code to run (but masking any other use of the debug LED while it is active).
-
-Here is a video of a sample Morse sequence:
-
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=8VpEXieqOn8" target="_blank"><img src="http://img.youtube.com/vi/8VpEXieqOn8/0.jpg" alt="printfMorse()" width="480" height="270" border="10" /></a>
-
-A good Morse chart can be found on [Wikipedia](https://en.wikipedia.org/wiki/Morse_code#/media/File:International_Morse_Code.svg).

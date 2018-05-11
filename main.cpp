@@ -18,11 +18,11 @@
 #include <mbed_stats.h> // For heap stats
 #include <cmsis_os.h>   // For stack stats
 #include <ctype.h>      // For toupper()
-#include "ble/BLE.h"
-#include "ble/Gap.h"
-#include "ButtonService.h"
 #include "UbloxATCellularInterfaceN2xx.h"
 #include "UbloxATCellularInterface.h"
+#include "ble_data_gather.h"
+#include "ble_uuids.h"
+#include "utilities.h"
 
 /* This code is intended to run on a UBLOX NINA-B1 module
  * that is powered directly from a storage device that is charged from
@@ -44,14 +44,21 @@
  *************************************************************************/
 
 // Define this to enable the BLE bits
-//#define ENABLE_BLE
+#define ENABLE_BLE
+
+// Define this to enable printing out of the serial port.  This is normally
+// off because (a) the only serial port is connected to the cellular modem and
+// (b) if that is not the case and you want to connect to a PC instead but
+// you don't happen to have a USB cable connected at the time then everything
+// will hang.
+//#define ENABLE_PRINTF_SERIAL
 
 // Define this to enable the Morse printing of RAM stats at each event
 //#define ENABLE_RAM_STATS
 
 // Define this to divert mbed-os asserts to Morse (requires you to edit mbed_error_vfprintf()
 // in mbed-os/platform/mbed_board.c and mbed_assert_internal() in mbed-os/platform/mbed_assert.c
-// to be WEAK in order that they can be overridden.
+// to be WEAK in order that they can be overridden).
 //#define ENABLE_ASSERTS_IN_MORSE
 
 // How frequently to wake-up to see if there is enough energy
@@ -59,10 +66,10 @@
 #define WAKEUP_INTERVAL_MS 60000
 
 // The number of times to attempt a cellular connection
-#define CONNECT_TRIES 1
+#define CELLULAR_CONNECT_TRIES 1
 
 // How long to wait for a network connection
-#define CONNECT_TIMEOUT_SECONDS 40
+#define CELLULAR_CONNECT_TIMEOUT_SECONDS 40
 
 // The credentials of the SIM in the board.  If PIN checking is enabled
 // for your SIM card you must set this to the required PIN.
@@ -72,6 +79,9 @@
 #define APN         NULL
 #define USERNAME    NULL
 #define PASSWORD    NULL
+
+// The prefix for BLE peer devices we want to connect to
+#define BLE_PEER_DEVICE_NAME_PREFIX "NINA-B1"
 
 // Debug LED
 #define LONG_PULSE_MS        500
@@ -86,6 +96,12 @@
 #define MORSE_LETTER_GAP     1250
 #define MORSE_WORD_GAP       1500
 #define MORSE_START_END_GAP  1500  // Must be at least as large as the letter gap
+
+#ifdef ENABLE_PRINTF_SERIAL
+# define PRINTF(format, ...) printf(format, ##__VA_ARGS__)
+#else
+# define PRINTF(...)
+#endif
 
 /**************************************************************************
  * LOCAL VARIABLES
@@ -138,8 +154,8 @@ static const char *pMorseCodes[] = {"..--.." /* ? */, ".--.-." /* @ */, ".-" /* 
                                     "-..-." /* / */, ".----" /* 1 */, "..---" /* 2 */, "...--" /* 3 */, "....-" /* 4 */, "....." /* 5 */,
                                     "-...." /* 6 */, "--..." /* 7 */, "---.." /* 8 */, "----." /* 9 */, "-----" /* 0 */};
 
-// An event queue
-static EventQueue eventQueue(/* event count */ 10 * EVENTS_EVENT_SIZE);
+// The wake-up event queue
+static EventQueue wakeUpEventQueue(/* event count */ 10 * EVENTS_EVENT_SIZE);
 
 #ifdef ENABLE_RAM_STATS
 // Storage for heap stats
@@ -147,16 +163,6 @@ static mbed_stats_heap_t statsHeap;
 
 // Storage for stack stats
 static mbed_stats_stack_t statsStack;
-#endif
-
-#ifdef ENABLE_BLE
-// The button on the Nina-B1 EVK
-static InterruptIn button(BLE_BUTTON_PIN_NAME);
-
-// BLE stuff
-const static char     DEVICE_NAME[] = "Button";
-static const uint16_t uuid16_list[] = {ButtonService::BUTTON_SERVICE_UUID};
-static ButtonService *pButtonService;
 #endif
 
 /**************************************************************************
@@ -230,7 +236,7 @@ void onboard_modem_power_down()
  *************************************************************************/
 
 // Pulse the debug LED for a number of milliseconds
-void pulseDebugLed(int milliseconds)
+static void pulseDebugLed(int milliseconds)
 {
     if (!morseActive) {
         debugLedBar = 1;
@@ -241,7 +247,7 @@ void pulseDebugLed(int milliseconds)
 }
 
 // Victory LED pattern
-void victoryDebugLed(int count)
+static void victoryDebugLed(int count)
 {
     if (!morseActive) {
         for (int x = 0; x < count; x++) {
@@ -365,6 +371,36 @@ static void vPrintfMorse(bool async, const char *pFormat, va_list args)
     }
 }
 
+// Print the BLE status
+static void printBleStatus(void)
+{
+    const char *pDeviceName;
+    BleData *pBleData;
+    char buf[32];
+    int numDataItems;
+    int numDevices = 0;
+    
+    for (pDeviceName = pBleGetFirstDeviceName(); pDeviceName != NULL; pDeviceName = pBleGetNextDeviceName()) {
+        numDevices++;
+        numDataItems = bleGetNumDataItems(pDeviceName);
+        PRINTF("** BLE device %d: %s, %d data item(s)", numDevices, pDeviceName, numDataItems);
+        if (numDataItems > 0) {
+            PRINTF(": ");
+            for (pBleData = pBleGetFirstDataItem(pDeviceName, true); pBleData != NULL; pBleData = pBleGetNextDataItem(pDeviceName)) {
+                victoryDebugLed(10);
+                PRINTF("0x%.*s ", bytesToHexString(pBleData->pData, pBleData->dataLen, buf, sizeof(buf)), buf);
+                free(pBleData->pData);
+                free(pBleData);
+            }
+        }
+        PRINTF("\n");
+    }
+    
+    if (numDevices == 0) {
+        PRINTF(".\n");
+    }
+}
+
 /**************************************************************************
  * STATIC FUNCTIONS: GENERAL
  *************************************************************************/
@@ -395,11 +431,11 @@ static void getUdpResponse()
 
     if (useR4Modem) {
         ((UbloxATCellularInterface *) pInterface)->set_credentials(APN, USERNAME, PASSWORD);
-        ((UbloxATCellularInterface *) pInterface)->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
+        ((UbloxATCellularInterface *) pInterface)->set_network_search_timeout(CELLULAR_CONNECT_TIMEOUT_SECONDS);
         ((UbloxATCellularInterface *) pInterface)->set_release_assistance(true);
     } else {
         ((UbloxATCellularInterfaceN2xx *) pInterface)->set_credentials(APN, USERNAME, PASSWORD);
-        ((UbloxATCellularInterfaceN2xx *) pInterface)->set_network_search_timeout(CONNECT_TIMEOUT_SECONDS);
+        ((UbloxATCellularInterfaceN2xx *) pInterface)->set_network_search_timeout(CELLULAR_CONNECT_TIMEOUT_SECONDS);
         ((UbloxATCellularInterfaceN2xx *) pInterface)->set_release_assistance(true);
     }
 
@@ -413,7 +449,7 @@ static void getUdpResponse()
     
     if (x) {
         // Register with the network
-        for (x = 0; !connected && powerIsGood() && (x < CONNECT_TRIES); x++) {
+        for (x = 0; !connected && powerIsGood() && (x < CELLULAR_CONNECT_TRIES); x++) {
             pulseDebugLed(SHORT_PULSE_MS);
             if (useR4Modem) {
                 connected = (((UbloxATCellularInterface *) pInterface)->connect() == 0);
@@ -490,18 +526,30 @@ static void ramStats()
     mbed_stats_heap_get(&statsHeap);
     mbed_stats_stack_get(&statsStack);
     
+    PRINTF("Heap left: %d byte(s), stack left %d byte(s).\n", statsHeap.reserved_size - statsHeap.max_size, statsStack.reserved_size - statsStack.max_size);
+#ifndef ENABLE_PRINTF_SERIAL
     printfMorse("H %d S %d", statsHeap.reserved_size - statsHeap.max_size, statsStack.reserved_size - statsStack.max_size);
+#endif
 }
 #endif
 
-// Perform the timed event
-static void eventTickCallback(void)
+// Perform the wake-up event
+static void wakeUpTickCallback(void)
 {
 #ifdef ENABLE_RAM_STATS
     ramStats();
 #endif
 
     if (powerIsGood()) {
+#ifdef ENABLE_BLE
+        PRINTF("BLE Scanning... (if you don't see dots appear below, try restarting your serial terminal).\n");
+        bleInit(BLE_PEER_DEVICE_NAME_PREFIX, TEMP_SRV_UUID_TEMP_CHAR, 100, &wakeUpEventQueue, false);
+        int x = wakeUpEventQueue.call_every(1000, printBleStatus);
+        bleRun(30000);
+        wait_ms(30000);
+        wakeUpEventQueue.cancel(x);
+        bleDeinit();
+#endif
         getUdpResponse();
         // Make sure the modem module is definitely off
         onboard_modem_power_down();
@@ -509,94 +557,6 @@ static void eventTickCallback(void)
         bad(1);
     }
 }
-
-/**************************************************************************
- * STATIC FUNCTIONS: BLE
- *************************************************************************/
-
-#ifdef ENABLE_BLE
-// Callback for button-down
-static void buttonPressedCallback(void)
-{
-    eventQueue.call(Callback<void(bool)>(pButtonService, &ButtonService::updateButtonState), true);
-}
-
-// Callback for button-up
-static void buttonReleasedCallback(void)
-{
-    eventQueue.call(Callback<void(bool)>(pButtonService, &ButtonService::updateButtonState), false);
-}
-
-// Callback for BLE disconnection
-static void disconnectionCallback(const Gap::DisconnectionCallbackParams_t *params)
-{
-    BLE::Instance().gap().startAdvertising(); // restart advertising
-}
-
-// Callback for BLE initialisation error handling
-static void onBleInitError(BLE &ble, ble_error_t error)
-{
-    /* Initialization error handling should go here */
-}
-
-// Callback to print the BLE MAC address
-static void printMacAddress()
-{
-    /* Print out device MAC address to the console*/
-    Gap::AddressType_t addr_type;
-    Gap::Address_t address;
-    BLE::Instance().gap().getAddress(&addr_type, address);
-    printf("DEVICE MAC ADDRESS: ");
-    for (int i = 5; i >= 1; i--) {
-        printf("%02x:", address[i]);
-    }
-    printf("%02x\r\n", address[0]);
-}
-
-// BLE initialisation complete handler
-static void bleInitComplete(BLE::InitializationCompleteCallbackContext *params)
-{
-    BLE& ble = params->ble;
-    ble_error_t error = params->error;
-
-    if (error != BLE_ERROR_NONE) {
-        /* In case of error, forward the error handling to onBleInitError */
-        onBleInitError(ble, error);
-        return;
-    }
-
-    /* Ensure that it is the default instance of BLE */
-    if (ble.getInstanceID() != BLE::DEFAULT_INSTANCE) {
-        return;
-    }
-
-    ble.gap().onDisconnection(disconnectionCallback);
-
-    button.fall(buttonPressedCallback);
-    button.rise(buttonReleasedCallback);
-
-    /* Setup primary service. */
-    pButtonService = new ButtonService(ble, false /* initial value for button pressed */);
-
-    /* setup advertising */
-    ble.gap().accumulateAdvertisingPayload(GapAdvertisingData::BREDR_NOT_SUPPORTED | GapAdvertisingData::LE_GENERAL_DISCOVERABLE);
-    ble.gap().accumulateAdvertisingPayload(GapAdvertisingData::COMPLETE_LIST_16BIT_SERVICE_IDS, (uint8_t *)uuid16_list, sizeof(uuid16_list));
-    ble.gap().accumulateAdvertisingPayload(GapAdvertisingData::COMPLETE_LOCAL_NAME, (uint8_t *)DEVICE_NAME, sizeof(DEVICE_NAME));
-    ble.gap().setAdvertisingType(GapAdvertisingParams::ADV_CONNECTABLE_UNDIRECTED);
-    ble.gap().setAdvertisingInterval(1000); /* 1000ms. */
-    ble.gap().startAdvertising();
-
-    // Comment this out if you don't have a USB cable
-    // connected or everything hangs at this point
-    // printMacAddress();
-}
-
-// BLE events
-static void scheduleBleEventsProcessing(BLE::OnEventsToProcessCallbackContext* context) {
-    BLE &ble = BLE::Instance();
-    eventQueue.call(Callback<void()>(&ble, &BLE::processEvents));
-}
-#endif // ENABLE_BLE
 
 /**************************************************************************
  * PUBLIC FUNCTIONS
@@ -653,16 +613,9 @@ int main()
     }
 
     // Call this directly once at the start since I'm an impatient sort
-    eventTickCallback();
+    wakeUpTickCallback();
 
     // Now start the timed callback
-    eventQueue.call_every(WAKEUP_INTERVAL_MS, eventTickCallback);
-
-#ifdef ENABLE_BLE
-    BLE &ble = BLE::Instance();
-    ble.onEventsToProcess(scheduleBleEventsProcessing);
-    ble.init(bleInitComplete);
-#endif
-
-    eventQueue.dispatch_forever();
+    wakeUpEventQueue.call_every(WAKEUP_INTERVAL_MS, wakeUpTickCallback);
+    wakeUpEventQueue.dispatch_forever();
 }
